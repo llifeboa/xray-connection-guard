@@ -109,12 +109,19 @@ class NetworkTests(unittest.TestCase):
             with mock.patch.object(sys, "argv", ["guard.py", "--config", str(path)]), \
                  mock.patch.object(g, "discover_server_ips", return_value={"192.0.2.10"}), \
                  mock.patch.object(g, "follower", return_value=follower), \
+                 mock.patch.object(g, "LogSizeMonitor") as logs, \
                  self.assertLogs(g.LOG, "INFO") as log:
                 g.main()
+        self.assertEqual(logs.call_args.args, (cfg["access"],))
+        self.assertEqual(logs.return_value.refresh.call_args_list,
+                         [mock.call(initial=True), mock.call()])
+        logs.return_value.close.assert_called_once()
         startup = next(line.split("Startup settings: ", 1)[1] for line in log.output if "Startup settings: " in line)
         settings = json.loads(startup)
         self.assertEqual(settings["server_ips"], ["192.0.2.10"])
         self.assertEqual(settings["network_refresh_seconds"], 600)
+        self.assertEqual(settings["log_size_check"]["interval_seconds"], 600)
+        self.assertEqual(settings["log_size_check"]["minimum_bytes"], 100 * 1024 ** 2)
         self.assertEqual(settings["access"], cfg["access"])
         self.assertEqual(settings["eve"]["type"], "file")
         self.assertEqual(settings["xray_timezone"], "Etc/GMT-3")

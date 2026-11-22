@@ -106,6 +106,7 @@ elif args[:2] == ['reload-or-restart', 'xray-connection-guard-queue.service']:
         assert core.stdout.readline().strip() == "ready"
         command = ["bash", str(root / "manage.sh")]
         run(command + ["install"], env=env)
+        assert Path("/opt/xray-connection-guard/log_maintenance.py").is_file()
         cfg_path = Path("/etc/xray-connection-guard/config.json")
         cfg = json.loads(cfg_path.read_text())
         cfg["firewall"]["tcp_ports"] = [8443]

@@ -64,6 +64,7 @@ case "$OP" in
       cp -a "$SCRIPT" "$SCRIPT.bak.$(date +%Y%m%d%H%M%S)"
     fi
     install -m 755 "$ROOT/src/guard.py" "$SCRIPT"
+    install -m 755 "$ROOT/src/log_maintenance.py" /opt/xray-connection-guard/log_maintenance.py
     install -m 755 "$ROOT/src/inspector.py" "$INSPECTOR"
     install -m 755 "$ROOT/src/install_suricata.py" /opt/xray-connection-guard/install_suricata.py
     install -m 755 "$ROOT/src/configure_guard.py" "$CONFIGURATOR"

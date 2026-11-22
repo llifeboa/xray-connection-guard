@@ -24,6 +24,8 @@ import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import log_maintenance
+
 LOG = logging.getLogger("xray-connection-guard")
 UTC = dt.timezone.utc
 ACCESS_RE = re.compile(r'^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}\.\d+)\s+from\s+(\S+)\s+accepted\s+(tcp|udp):([^\s]+)\s+\[[^\]]+\]\s+email:\s*(\S+)')
@@ -547,6 +549,72 @@ class AddressMonitor:
         return changed
 
 
+class LogSizeMonitor:
+    """Check Docker/Supervisor logs without pausing event processing."""
+    def __init__(self, source):
+        self.source = source
+        self.next_check = 0
+        self.worker = None
+        self.pending_restart = False
+
+    def refresh(self, *, initial=False):
+        if self.source.get("type", "file") != "docker":
+            return False
+        if self.worker is not None and self.worker.is_alive():
+            return False
+        now = time.monotonic()
+        if not initial and now < self.next_check:
+            return False
+        self.next_check = now + NETWORK_REFRESH_SECONDS
+        self.worker = threading.Thread(target=self.check, daemon=True, name="xray-log-size")
+        self.worker.start()
+        return True
+
+    def check(self):
+        container = self.source["container"]
+        try:
+            # Supervisor already needs Python in its container. Stream only this
+            # static helper; no environment variables, credentials, or log data.
+            script = Path(log_maintenance.__file__).read_text(encoding="utf-8")
+            command = ["docker", "exec", "-i", "--user", "0", container, "python3", "-",
+                       log_maintenance.SUPERVISOR_CONFIG, self.source["path"]]
+            response = run(command, stdin=script, check=False)
+            try:
+                result = json.loads(response.stdout)
+            except (ValueError, TypeError):
+                raise RuntimeError("Cannot run Supervisor log check inside the container") from None
+            if not isinstance(result, dict) or result.get("status") not in (
+                    "changed", "unchanged", "unsupported", "error"):
+                raise RuntimeError("Unexpected Supervisor log check result")
+            if response.returncode or result["status"] == "error":
+                raise RuntimeError(result.get("error", "Supervisor log check failed"))
+            if result["status"] == "unsupported":
+                LOG.info("Xray log size check: container=%s skipped=%s; next_check_in=%ds",
+                         container, result["reason"], NETWORK_REFRESH_SECONDS)
+                return
+            if result["status"] == "changed":
+                self.pending_restart = True
+                LOG.warning("Xray log limit increased: container=%s previous_bytes=%s minimum_bytes=%d; "
+                            "restarting container to apply the change",
+                            container, result["previous_limit_bytes"], log_maintenance.MIN_LOG_BYTES)
+            if self.pending_restart:
+                # No supervisorctl dependency: older node images omit its RPC configuration.
+                run(["docker", "restart", "--timeout", "10", container])
+                self.pending_restart = False
+                LOG.info("Xray log size check: container=%s limit_bytes=%s container_restarted=true; "
+                         "next_check_in=%ds", container, result["limit_bytes"], NETWORK_REFRESH_SECONDS)
+            else:
+                LOG.info("Xray log size check: container=%s limit_bytes=%s container_restarted=false; "
+                         "next_check_in=%ds", container, result["limit_bytes"], NETWORK_REFRESH_SECONDS)
+        except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as exc:
+            LOG.error("Xray log size check failed: container=%s; retry_in=%ds: %s",
+                      container, NETWORK_REFRESH_SECONDS, exc)
+
+    def close(self):
+        if self.worker is not None:
+            self.worker.join(timeout=1)
+
+
 def validate(cfg):
     if not isinstance(cfg, dict):
         raise ValueError("Config must be an object")
@@ -918,6 +986,10 @@ def effective_settings(cfg, server_ips, mode):
     settings = {
         "mode": mode, "server_ips": sorted(server_ips), "server_ips_detection": "automatic",
         "network_refresh_seconds": NETWORK_REFRESH_SECONDS, **sources,
+        "log_size_check": {"enabled": cfg["access"].get("type") == "docker",
+                           "interval_seconds": NETWORK_REFRESH_SECONDS,
+                           "minimum_bytes": log_maintenance.MIN_LOG_BYTES,
+                           "restart": "only after increasing the Supervisor log limit"},
         "xray_timezone": cfg.get("xray_timezone", "UTC"),
         "xray_timezone_name": cfg.get("xray_timezone_name", cfg.get("xray_timezone", "UTC")),
         "xray_utc_offset_seconds": int(dt.datetime.now(load_timezone(
@@ -973,10 +1045,13 @@ def main():
     out = queue.Queue(maxsize=50000)
     followers = [follower(cfg["access"], "access", out), follower(cfg["eve"], "eve", out)]
     correlator = Correlator(cfg, server_ips, args.mode, firewall)
+    logs = LogSizeMonitor(cfg["access"])
     LOG.info("Started mode=%s, network=host, ban=%ds", args.mode, BAN_SECONDS)
     try:
+        logs.refresh(initial=True)
         while True:
             network.refresh()
+            logs.refresh()
             for f in followers:
                 f.step()
             for _ in range(15000):
@@ -993,6 +1068,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        logs.close()
         for f in followers:
             f.close()
 
