@@ -1,0 +1,19 @@
+[Unit]
+Description=Xray P2P guard (10-minute IP bans)
+After=network-online.target docker.service xray-ndpi.service
+Wants=network-online.target
+Requires=xray-ndpi.service
+
+[Service]
+Type=simple
+User=root
+ExecStartPre=/usr/bin/python3 -B /opt/xray-connection-guard/configure_guard.py --config /etc/xray-connection-guard/config.json
+ExecStartPre=/usr/bin/python3 /opt/xray-connection-guard/guard.py --config /etc/xray-connection-guard/config.json --check
+ExecStart=/usr/bin/python3 -u /opt/xray-connection-guard/guard.py --config /etc/xray-connection-guard/config.json --mode enforce --allow-ban
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

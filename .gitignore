@@ -1,0 +1,9 @@
+.idea/
+*.iml
+__pycache__/
+*.py[cod]
+/.venv/
+/venv/
+/config.json
+*.log
+/audit*.jsonl

@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+import contextlib
+import datetime as dt
+import io
+import json
+import os
+import struct
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+import configure_guard as c
+import guard
+
+
+def tzif(offset=10800, name="TST"):
+    abbreviation = name.encode() + b"\0"
+    return (b"TZif\0" + bytes(15) + struct.pack("!6I", 0, 0, 0, 0, 1, len(abbreviation)) +
+            struct.pack("!iBB", offset, 0, 0) + abbreviation)
+
+
+class ConfigurationTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.folder = Path(self.temp.name)
+        self.directory = self.folder / "proc/100"
+        self.root = self.directory / "root"
+        self.root.mkdir(parents=True)
+        self.process = c.Process(100, self.directory, "mnt-node")
+        (self.directory / "environ").write_bytes(b"TZ=Etc/GMT-3\0UNUSED_TOKEN=do-not-log\0")
+        self.zone = self.root / "usr/share/zoneinfo/Etc/GMT-3"
+        self.zone.parent.mkdir(parents=True)
+        self.zone.write_bytes(tzif())
+        self.config_path = self.folder / "guard.json"
+        self.config_path.write_text(json.dumps({
+            "access": {"type": "file", "path": "/old/access.log"},
+            "eve": {"type": "file", "path": "/var/log/xray-ndpi/eve.json"},
+            "xray_timezone": "UTC", "min_distinct_flows": 7,
+            "firewall": {"host_network": True, "allowlist_cidrs": ["198.51.100.0/24"]}}))
+
+    def helper(self, path="/custom/xray/current"):
+        helper = self.root / "usr/local/bin/xlogs"
+        helper.parent.mkdir(parents=True)
+        helper.write_text(f"#!/bin/sh\nexec tail -n +1 -F '{path}'\n")
+        log = self.root / path.lstrip("/")
+        log.parent.mkdir(parents=True)
+        log.touch()
+
+    def test_remnawave_uses_actual_xlogs_path_and_container_name(self):
+        self.helper()
+        inventory = [{"name": "/custom-node", "pid": 42, "network": "host", "image": "custom/image"}]
+        original = os.readlink
+
+        def readlink(path):
+            return "mnt-node" if str(path) == "/proc/42/ns/mnt" else original(path)
+
+        with mock.patch.object(c.os, "readlink", side_effect=readlink):
+            source, process = c.discover_source([self.process], inventory)
+        self.assertEqual(source, {"type": "docker", "container": "custom-node", "path": "/custom/xray/current"})
+        self.assertIs(process, self.process)
+
+    def test_open_access_file_is_detected_for_host_xray(self):
+        directory = self.folder / "host-process"
+        directory.mkdir()
+        (directory / "root").symlink_to("/", target_is_directory=True)
+        process = c.Process(101, directory, "host-mount")
+        log = self.folder / "custom-access.log"
+        log.touch()
+        descriptors = directory / "fd"
+        descriptors.mkdir()
+        (descriptors / "7").symlink_to(log)
+        # Ignore non-log files and stdout pipes.
+        (descriptors / "8").symlink_to("pipe:[12345]")
+        source, _ = c.discover_source([process], [])
+        self.assertEqual(source, {"type": "file", "path": str(log)})
+
+    def test_timezone_uses_xray_environment_and_copies_its_rules(self):
+        label, data = c.timezone(self.process)
+        self.assertEqual(label, "Etc/GMT-3")
+        self.assertEqual(data, tzif())
+        self.assertEqual(c.ZoneInfo.from_file(io.BytesIO(data)).utcoffset(None), dt.timedelta(hours=3))
+
+    def test_idle_marzban_log_is_found_without_an_open_descriptor(self):
+        log = self.root / "var/lib/marzban/access.log"
+        log.parent.mkdir(parents=True)
+        log.touch()
+        self.assertEqual(c.access_paths(self.process), {"/var/lib/marzban/access.log"})
+
+    def test_unset_tz_resolves_absolute_localtime_symlink_in_process_root(self):
+        (self.directory / "environ").write_bytes(b"UNUSED=example\0")
+        (self.root / "etc").mkdir()
+        (self.root / "etc/localtime").symlink_to("/usr/share/zoneinfo/Etc/GMT-3")
+        self.assertEqual(c.timezone(self.process), ("Etc/GMT-3", tzif()))
+
+    def test_empty_or_unloadable_timezone_has_go_utc_fallback(self):
+        for value in ("", "UTC", "Unknown/Timezone"):
+            with self.subTest(value=value):
+                (self.directory / "environ").write_bytes(f"TZ={value}\0".encode())
+                self.assertEqual(c.timezone(self.process), ("UTC", None))
+
+    def test_configuration_is_automatic_idempotent_and_preserves_thresholds(self):
+        source = {"type": "docker", "container": "real-node", "path": "/custom/current"}
+        with mock.patch.object(c, "processes", return_value=[self.process]), \
+             mock.patch.object(c, "containers", return_value=[]), \
+             mock.patch.object(c, "discover_source", return_value=(source, self.process)), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            c.configure(self.config_path)
+            before = {str(path): path.read_bytes() for path in self.folder.rglob("*") if path.is_file()}
+            c.configure(self.config_path)
+            after = {str(path): path.read_bytes() for path in self.folder.rglob("*") if path.is_file()}
+        self.assertEqual(before, after)
+        cfg = json.loads(self.config_path.read_text())
+        self.assertEqual(cfg["access"], source)
+        self.assertEqual(cfg["xray_timezone_name"], "Etc/GMT-3")
+        self.assertEqual(cfg["min_distinct_flows"], 7)
+        self.assertEqual(cfg["firewall"]["allowlist_cidrs"], ["198.51.100.0/24"])
+        guard.validate(cfg)
+        stamp = guard.parse_access(
+            "2025/01/15 18:00:00.000001 from tcp:203.0.113.20:50000 accepted udp:198.51.100.1:6881 "
+            "[IN >> DIRECT] email: test", guard.load_timezone(cfg["xray_timezone"]))["ts"]
+        self.assertAlmostEqual(stamp, dt.datetime(2025, 1, 15, 15, tzinfo=dt.timezone.utc).timestamp(), places=4)
+        self.assertIn("Changed:", output.getvalue())
+        self.assertIn("unchanged", output.getvalue())
+        self.assertNotIn("do-not-log", output.getvalue())
+
+    def test_discovery_failure_leaves_existing_configuration_untouched(self):
+        original = self.config_path.read_bytes()
+        with mock.patch.object(c, "processes", return_value=[]), mock.patch.object(c, "containers", return_value=[]):
+            with self.assertRaises(c.DiscoveryError):
+                c.configure(self.config_path)
+        self.assertEqual(self.config_path.read_bytes(), original)
+        self.assertFalse((self.folder / "xray-timezone.tzif").exists())
+
+    def test_install_can_defer_detection_until_xray_starts(self):
+        original = self.config_path.read_bytes()
+        with mock.patch.object(c, "processes", return_value=[]), \
+             mock.patch.object(c, "containers", return_value=[]), \
+             mock.patch.object(c.os, "geteuid", return_value=0), \
+             mock.patch.object(c, "__name__", "configure_guard"), \
+             mock.patch("sys.argv", ["configure_guard.py", "--config", str(self.config_path), "--defer"]), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            c.main()
+        self.assertIn("Detection deferred until enable", output.getvalue())
+        self.assertEqual(self.config_path.read_bytes(), original)
+
+    def test_several_nodes_require_explicit_selection(self):
+        first = self.process
+        second = c.Process(101, self.directory, "mnt-second")
+        inventory = [{"name": "/first", "pid": 1, "network": "host"},
+                     {"name": "/second", "pid": 2, "network": "host"}]
+
+        def readlink(path):
+            return "mnt-node" if str(path) == "/proc/1/ns/mnt" else "mnt-second"
+
+        with mock.patch.object(c.os, "readlink", side_effect=readlink), \
+             mock.patch.object(c, "xlogs_path", return_value="/logs/current"):
+            with self.assertRaisesRegex(c.DiscoveryError, "Several Xray"):
+                c.discover_source([first, second], inventory)
+            source, _ = c.discover_source([first, second], inventory, container="second")
+        self.assertEqual(source["container"], "second")
+
+
+if __name__ == "__main__":
+    unittest.main()

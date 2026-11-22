@@ -1,0 +1,17 @@
+{
+  "eve": {"type": "file", "path": "/var/log/xray-ndpi/eve.json"},
+  "access": {"type": "file", "path": "/var/lib/marzban/access.log"},
+  "xray_timezone": "UTC",
+  "signatures": [9100001],
+  "max_match_delay_seconds": 60,
+  "correlation_buffer_seconds": 3,
+  "window_seconds": 300,
+  "min_distinct_peers": 5,
+  "min_distinct_flows": 5,
+  "audit_path": "/var/log/xray-connection-guard/audit.jsonl",
+  "firewall": {
+    "host_network": true,
+    "ban_seconds": 600,
+    "allowlist_cidrs": []
+  }
+}
