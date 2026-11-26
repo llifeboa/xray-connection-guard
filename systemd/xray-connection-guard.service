@@ -5,7 +5,8 @@ Wants=network-online.target
 Requires=xray-ndpi.service
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 User=root
 ExecStartPre=/usr/bin/python3 -B /opt/xray-connection-guard/configure_guard.py --config /etc/xray-connection-guard/config.json
 ExecStartPre=/usr/bin/python3 /opt/xray-connection-guard/guard.py --config /etc/xray-connection-guard/config.json --check

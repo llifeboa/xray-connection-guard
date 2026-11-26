@@ -97,7 +97,9 @@ class Network:
         source = next((address["local"] for address in device.get("addr_info", [])
                        if address.get("family") == "inet" and address.get("scope") == "global"), None)
         if source is None or not isinstance(ipaddress.ip_address(source), ipaddress.IPv4Address):
-            raise RuntimeError(f"Set an IPv4 gateway in Xray's TUN settings for {interface}")
+            raise RuntimeError(f"Set an IPv4 gateway in Xray's TUN settings for {interface}; "
+                               "Xray 26.3.27 ignores gateway. Check the actual container core version "
+                               "and apply the RU profile; tested core: 26.11.9")
         selected_rules = [rule for rule in rules() if rule.get("priority") == PRIORITY or
                           str(rule.get("table")) == str(TABLE)]
         selected_routes = routes()

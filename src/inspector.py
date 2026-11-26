@@ -387,6 +387,16 @@ def wait_network(paths):
     raise RuntimeError(f"IPv4 TUN routing for {interface} is not ready; check {QUEUE_UNIT} logs")
 
 
+def stop_queue(paths):
+    tun_network.Network(paths.network).clear()
+    result = os.environ.get("SERVICE_RESULT", "success")
+    if result != "success":
+        print(f"[inspection] Queue service failed ({result}); keeping NFQUEUE rules fail-closed. "
+              "Restore the RU profile before running queue-off manually.", flush=True)
+        return
+    update_queue(remove=True, paths=paths)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("install", "check", "ready", "queue", "queue-off",
@@ -409,8 +419,7 @@ def main():
         elif args.action == "network-ready":
             wait_network(paths)
         elif args.action == "queue-off":
-            tun_network.Network(paths.network).clear()
-            update_queue(remove=True, paths=paths)
+            stop_queue(paths)
         else:
             update_queue(paths=paths)
             interface = selected_interface(paths)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import copy
 import datetime as dt
-import io
 import json
 import os
 import queue
@@ -787,15 +786,90 @@ class FollowerTests(unittest.TestCase):
         self.f.step()
         self.assertEqual(self.drain(),['new'])
 
-    def test_command_reader_retries_the_same_line_when_queue_is_full(self):
-        out=mock.Mock()
-        out.put.side_effect=[queue.Full,None,None]
-        follower=g.CommandFollower(['unused'],'eve',out)
-        proc=mock.Mock(stdout=io.StringIO('first\nsecond\n'))
-        with self.assertLogs(g.LOG,level='WARNING'):
-            follower.reader(proc)
-        self.assertEqual([call.args[0] for call in out.put.call_args_list],
-                         [('eve','first'),('eve','first'),('eve','second')])
+
+@unittest.skipIf(os.name == 'nt', 'Docker /proc roots require a Linux host')
+class DockerFollowerTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.log = self.root / 'access.log'
+        self.log.write_text('historical\n', encoding='utf-8')
+        self.out = queue.Queue(maxsize=2)
+        self.follower = g.DockerFollower('marzban', '/var/log/access.log', 'access',
+                                         self.out, proc=self.root / 'proc')
+        self.addCleanup(self.follower.close)
+        self.process(123)
+        with mock.patch.object(g, 'run', return_value=mock.Mock(stdout='123\n')):
+            self.follower.step()
+
+    def process(self, pid):
+        path = self.root / 'proc' / str(pid) / 'root/var/log/access.log'
+        path.parent.mkdir(parents=True)
+        path.hardlink_to(self.log)
+        return path
+
+    def append(self, text):
+        with self.log.open('a', encoding='utf-8') as output:
+            output.write(text)
+
+    def drain(self):
+        lines = []
+        while not self.out.empty():
+            lines.append(self.out.get_nowait()[1])
+        return lines
+
+    def test_restart_keeps_offset_and_reads_writes_during_disconnect(self):
+        self.append('before\n')
+        self.follower.step()
+        self.assertEqual(self.drain(), ['before'])
+        (self.root / 'proc/123').rename(self.root / 'exited')
+        self.append('during\n')
+        with mock.patch.object(g, 'run', return_value=mock.Mock(stdout='0\n')):
+            self.follower.step()
+        self.assertEqual(self.drain(), ['during'])
+        self.process(456)
+        self.append('after\n')
+        self.follower.next_lookup = 0
+        with mock.patch.object(g, 'run', return_value=mock.Mock(stdout='456\n')):
+            self.follower.step()
+        self.assertEqual(self.drain(), ['after'])
+
+    def test_full_queue_preserves_docker_lines(self):
+        self.append('first\nsecond\nthird\n')
+        self.follower.step()
+        lines = self.drain()
+        self.follower.step()
+        lines.extend(self.drain())
+        self.assertEqual(lines, ['first', 'second', 'third'])
+
+    def test_reused_pid_is_resolved_again_before_opening_another_root(self):
+        (self.root / 'proc/123').rename(self.root / 'exited')
+        self.process(123)
+        self.follower.next_lookup = 0
+        with mock.patch.object(g, 'run', return_value=mock.Mock(stdout='123\n')) as inspect:
+            self.follower.step()
+        inspect.assert_called_once()
+
+    def test_unchanged_process_does_not_spawn_repeated_docker_commands(self):
+        with mock.patch.object(g, 'run') as inspect:
+            self.follower.step()
+            self.follower.step()
+        inspect.assert_not_called()
+
+    def test_recreated_container_reads_its_new_log_from_the_beginning(self):
+        self.append('last-old\n')
+        (self.root / 'proc/123').rename(self.root / 'exited')
+        replacement = self.process(456)
+        replacement.unlink()
+        replacement.write_text('first-new\n', encoding='utf-8')
+        self.follower.next_lookup = 0
+        with mock.patch.object(g, 'run', return_value=mock.Mock(stdout='456\n')):
+            self.follower.step()
+            lines = self.drain()
+            self.follower.step()
+            lines.extend(self.drain())
+        self.assertEqual(lines, ['last-old', 'first-new'])
 
 if __name__=='__main__':
     unittest.main(verbosity=2)

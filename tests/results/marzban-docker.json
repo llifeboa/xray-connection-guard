@@ -1,0 +1,146 @@
+{
+  "tested_on": "2026-11-26",
+  "status": "passed_with_documented_negative_scenarios",
+  "environment": {
+    "outer_docker": "Docker Desktop 4.25.1 / Engine 24.0.6, Windows + WSL2",
+    "isolated_host": "Ubuntu 24.04 container, real systemd and a separate Docker Engine",
+    "systemd": "systemd 255 (255.4-1ubuntu8.19)",
+    "nested_docker": "29.1.3",
+    "kernel": "6.18.58.1-microsoft-standard-WSL2",
+    "network_mode": "separate bridge, not outer host networking",
+    "cgroup_namespace": "private",
+    "privileged": true,
+    "host_bind_mounts": [],
+    "shared_outer_docker_socket": false,
+    "marzban_version": "0.8.4",
+    "marzban_image": "gozargah/marzban@sha256:8e422c21997e5d2e3fa231eeff73c0a19193c20fc02fa4958e9368abb9623b8d",
+    "suricata": "8.0.8",
+    "ndpi": "4.14",
+    "engine_origin": "Previously built engine copied from WSL; not rebuilt in this Docker run",
+    "cold_start_method": "docker restart of the isolated systemd host, not a physical machine power cycle"
+  },
+  "cores": {
+    "legacy": "26.3.27",
+    "current": "26.11.9",
+    "clients": "26.3.27",
+    "exit": "26.11.9"
+  },
+  "legacy": {
+    "gateway_configured": [
+      "198.18.0.1/30"
+    ],
+    "observed_ipv4": [],
+    "enable_exit_code": 1,
+    "queue_error": "Xray 26.3.27 ignores gateway; TUN remains without IPv4 and queue readiness fails",
+    "management_successful_samples": 588,
+    "management_failures": []
+  },
+  "checks": [
+    "26.3.27 ignores gateway; enable fails without changing physical default",
+    "26.11.9 assigns gateway; real systemd services and Marzban TCP path are healthy",
+    "Repeated enable is idempotent; Docker log discovery, TCP, UDP peer changes and DNS work",
+    "Marzban core restart recreates TUN and restores IPv4 routing without manual commands",
+    "Marzban container restart restores the inspected TCP/UDP path; SSH stays reachable",
+    "Real guard service bans both original client IPs for 600s; UDP uses one socket; control and SSH survive",
+    "off clears only IP bans; monitor keeps Suricata blocking but does not apply IP bans",
+    "Stopping xray-ndpi.service: documented stop semantics; enable restores services and preserves the physical default",
+    "Stopping xray-connection-guard-queue.service: documented stop semantics; enable restores services and preserves the physical default",
+    "Queue watcher crash retains fail-closed NFQUEUE rules; explicit enable recovers all services",
+    "Missing gateway breaks only the selected proxy path; restoring the profile recovers routing automatically",
+    "Negative test: global autoSystemRoutingTable can cut off SSH; reverting the profile restores access",
+    "Full rollback removes owned routes, policy rule and NFQUEUE; the original relay path still works",
+    "Cold start: real systemd, nested Docker, Marzban, guard, Suricata and IPv4 TUN recover without enable"
+  ],
+  "management": {
+    "successful_service_probes": 505,
+    "unexpected_failures": [],
+    "expected_failures": {
+      "marzban-restart:panel": 20,
+      "unsafe-global-default:ssh": 2,
+      "unsafe-global-default:panel": 1
+    },
+    "unsafe_global_default": [
+      {
+        "dst": "default",
+        "dev": "xray-guard",
+        "metric": 1,
+        "flags": []
+      },
+      {
+        "dst": "default",
+        "gateway": "192.0.2.5",
+        "dev": "client-test",
+        "metric": 100,
+        "flags": []
+      }
+    ]
+  },
+  "bans": [
+    {
+      "client_ip": "11.0.0.20",
+      "protocol": "TCP",
+      "result": "banned-600s",
+      "ban_seconds": 600,
+      "distinct_flows": 5,
+      "distinct_peer_ips": 5,
+      "correlation": "peer",
+      "local_ports": [
+        59916,
+        41962,
+        39152,
+        56386,
+        60818
+      ]
+    },
+    {
+      "client_ip": "11.0.0.21",
+      "protocol": "UDP",
+      "result": "banned-600s",
+      "ban_seconds": 600,
+      "distinct_flows": 5,
+      "distinct_peer_ips": 5,
+      "correlation": "udp_socket",
+      "local_ports": [
+        44735
+      ]
+    }
+  ],
+  "cold_start": {
+    "manual_enable": false,
+    "units": [
+      "active",
+      "active",
+      "active"
+    ],
+    "core": "26.11.9"
+  },
+  "explicit_queue_stop": "traffic can pass without inspection; restore the profile first",
+  "fixes_validated": [
+    "Netlink address notifications update local IPs after TUN recreation instead of using a stale 600-second cache",
+    "Docker log follower retains its file descriptor and offset across container restarts and log replacement",
+    "systemd Type=notify waits until access and EVE log readers are initialized",
+    "Abnormal queue service termination retains NFQUEUE rules; explicit queue-off cleans them after profile rollback"
+  ],
+  "fixture_adjustments": [
+    "Explicit matching REALITY publicKey for Marzban 0.8.4",
+    "Private test HTTPS certificate; external public-IP discovery endpoints mapped to loopback",
+    "Reserved peer addresses allowed only in test freedom.finalRules; real guard allows normal global test client IPs from an isolated namespace",
+    "First reboot attempt lost an engine stored under /tmp; engine moved to /opt/xray-guard-test-engine with unchanged binary SHA256 before the successful reboot"
+  ],
+  "sha256": {
+    "/fixtures/old/xray": "8255dd939c34cf966cc91517b6324dd3c8d0bcf49ffac8beca049a38c46845ed",
+    "/fixtures/new/xray": "e87bce586acdb9136aa5b1f1d9c8db9f1ea1d145b6d86368c7f6f662f9f6a66d",
+    "/opt/xray-guard-test-engine/bin/suricata": "deb397377a77818e49ec1b0deadbbbb6509085130f4e8849cc4799aec210baaf",
+    "/opt/xray-guard-test-engine/lib/suricata/ndpi.so": "c9398488d921231c0227a4bb4ae7b8ff417f8b3920c2317497f2ebcdf7ad58ab"
+  },
+  "raw_reports": "C:/Users/Ilya/AppData/Local/Temp/xray-guard-marzban-report-d8213c",
+  "limitations": [
+    "No access to or changes on the production server; its exact SSH outage cause is not proven by this local test",
+    "Synthetic BitTorrent handshake/DHT and local peers, not a public torrent download",
+    "SSH probes validate TCP connection and server banner; panel probes use HTTPS",
+    "600 seconds validated as the actual nftables timeout; no ten-minute wall-clock expiry wait",
+    "Other panel versions, Marzban-node/rpyc and every possible firewall/profile combination were not covered",
+    "Intentional queue stop removes inspection and may pass traffic; it is not a safe monitoring mode",
+    "Fail-closed disruption probes use new TCP requests; they are not exhaustive checks of every established TCP/UDP session"
+  ]
+}

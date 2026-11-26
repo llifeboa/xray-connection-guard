@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,20 @@ def config():
 
 
 class NetworkTests(unittest.TestCase):
+    def test_ready_notification_is_optional_outside_systemd(self):
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(g.socket, "socket") as connection:
+            g.notify_ready()
+        connection.assert_not_called()
+
+    def test_ready_notification_supports_filesystem_and_abstract_sockets(self):
+        for address, expected in (("/run/notify", "/run/notify"), ("@guard-notify", "\0guard-notify")):
+            with self.subTest(address=address), mock.patch.dict(os.environ, NOTIFY_SOCKET=address), \
+                 mock.patch.object(g.socket, "socket") as connection:
+                g.notify_ready()
+            notification = connection.return_value.__enter__.return_value
+            notification.connect.assert_called_once_with(expected)
+            notification.sendall.assert_called_once_with(b"READY=1")
+
     def test_inspection_defaults_to_mark_and_reports_selected_interface(self):
         cfg = config()
         g.validate(cfg)
@@ -88,6 +103,51 @@ class NetworkTests(unittest.TestCase):
         self.assertEqual(addresses, {"192.0.2.10"})
         self.assertIn("ip command failed", log.output[0])
         self.assertEqual(monitor.next_check, 1300)
+
+    @unittest.skipUnless(hasattr(g.socket, "AF_NETLINK"), "Linux netlink is required")
+    def test_tun_address_notification_updates_shared_addresses_without_waiting_600_seconds(self):
+        addresses = {"192.0.2.10"}
+        monitor = g.AddressMonitor(addresses)
+        changes = mock.Mock()
+        changes.recv.side_effect = [BlockingIOError(), b"address added", BlockingIOError(), BlockingIOError()]
+        with mock.patch.object(g.socket, "socket", return_value=changes), \
+             mock.patch.object(g, "discover_server_ips", side_effect=[
+                 {"192.0.2.10"}, {"192.0.2.10", "198.18.0.1"}]) as probe:
+            monitor.watch()
+            with mock.patch.object(g.time, "monotonic", return_value=100):
+                monitor.refresh(initial=True)
+            with mock.patch.object(g.time, "monotonic", return_value=101):
+                self.assertTrue(monitor.refresh())
+            with mock.patch.object(g.time, "monotonic", return_value=102):
+                self.assertFalse(monitor.refresh())
+            monitor.close()
+        changes.bind.assert_called_once_with((0, 0x111))
+        self.assertEqual(probe.call_count, 2)
+        self.assertIn("198.18.0.1", addresses)
+        changes.close.assert_called_once()
+
+    @unittest.skipUnless(hasattr(g.socket, "AF_NETLINK"), "Linux netlink is required")
+    def test_failed_notification_refresh_retries_after_one_second(self):
+        monitor = g.AddressMonitor({"192.0.2.10"})
+        monitor.changes = mock.Mock()
+        monitor.changes.recv.side_effect = [b"address added", BlockingIOError(), BlockingIOError()]
+        with mock.patch.object(g, "discover_server_ips", side_effect=[
+                RuntimeError("temporary failure"), {"192.0.2.10", "198.18.0.1"}]), \
+             mock.patch.object(g.time, "monotonic", side_effect=[100, 101]):
+            self.assertFalse(monitor.refresh())
+            self.assertEqual(monitor.next_check, 101)
+            self.assertTrue(monitor.refresh())
+        self.assertIn("198.18.0.1", monitor.server_ips)
+
+    @unittest.skipUnless(hasattr(g.socket, "AF_NETLINK"), "Linux netlink is required")
+    def test_failed_netlink_bind_closes_socket(self):
+        monitor = g.AddressMonitor(set())
+        changes = mock.Mock()
+        changes.bind.side_effect = OSError("cannot subscribe")
+        with mock.patch.object(g.socket, "socket", return_value=changes):
+            with self.assertRaisesRegex(OSError, "cannot subscribe"):
+                monitor.watch()
+        changes.close.assert_called_once()
 
     def test_initial_discovery_failure_stops_startup(self):
         monitor = g.AddressMonitor(set())

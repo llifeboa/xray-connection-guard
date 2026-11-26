@@ -172,6 +172,25 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class QueueTests(unittest.TestCase):
+    def test_failed_queue_service_keeps_nfqueue_rules(self):
+        for result in ("signal", "exit-code", "timeout", "oom-kill"):
+            with self.subTest(result=result), mock.patch.dict(i.os.environ, SERVICE_RESULT=result), \
+                 mock.patch.object(i.tun_network, "Network") as network, \
+                 mock.patch.object(i, "update_queue") as update:
+                paths = i.Paths()
+                i.stop_queue(paths)
+            network.return_value.clear.assert_called_once()
+            update.assert_not_called()
+
+    def test_explicit_queue_stop_removes_owned_nfqueue_rules(self):
+        with mock.patch.dict(i.os.environ, {}, clear=True), \
+             mock.patch.object(i.tun_network, "Network") as network, \
+             mock.patch.object(i, "update_queue") as update:
+            paths = i.Paths()
+            i.stop_queue(paths)
+        network.return_value.clear.assert_called_once()
+        update.assert_called_once_with(remove=True, paths=paths)
+
     @staticmethod
     def owned():
         return mock.Mock(returncode=0, stdout=f'table inet {i.TABLE} {{\n comment "{i.OWNER}"\n}}\n')

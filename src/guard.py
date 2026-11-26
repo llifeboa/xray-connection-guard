@@ -17,6 +17,7 @@ import queue
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -385,52 +386,56 @@ class FileFollower:
             self.fp = None
 
 
-class CommandFollower:
-    """Follow Docker-stored logs without requiring a container bind mount."""
-    def __init__(self, args, name, out):
-        self.args = args
-        self.name = name
-        self.out = out
-        self.proc = None
-        self.stopped = threading.Event()
-        self.last_start = 0
+class DockerFollower(FileFollower):
+    """Keep the file offset across Docker restarts, including disconnected writes."""
+    def __init__(self, container, path, name, out, proc=Path("/proc")):
+        super().__init__(path, name, out)
+        self.container = container
+        self.log_path = path
+        self.proc = proc
+        self.process = None
+        self.process_inode = None
+        self.next_lookup = 0
+
+    def resolve(self):
+        if self.process is not None:
+            try:
+                if self.process.stat().st_ino == self.process_inode:
+                    return True
+            except OSError:
+                pass
+        now = time.monotonic()
+        if now < self.next_lookup:
+            return False
+        self.next_lookup = now + 1
+        try:
+            result = run(["docker", "inspect", "--format", "{{.State.Pid}}", self.container])
+            pid = int(result.stdout.strip())
+            if pid <= 0:
+                raise RuntimeError(f"Container {self.container} is not running")
+            process = self.proc / str(pid)
+            identity = process.stat().st_ino
+            self.path = process / "root" / self.log_path.lstrip("/")
+            self.process = process
+            self.process_inode = identity
+            LOG.info("Docker %s log resolved: container=%s pid=%d path=%s",
+                     self.name, self.container, pid, self.log_path)
+            return True
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+            if time.time() - self.last_warning > 10:
+                LOG.warning("Cannot resolve Docker %s log: %s", self.name, exc)
+                self.last_warning = time.time()
+            return False
 
     def step(self):
-        if self.proc and self.proc.poll() is None:
-            return
-        if time.monotonic() - self.last_start < 5:
-            return
-        self.last_start = time.monotonic()
-        try:
-            self.proc = subprocess.Popen(self.args, stdout=subprocess.PIPE,
-                                         stderr=subprocess.DEVNULL, text=True,
-                                         bufsize=1, start_new_session=True)
-            LOG.info("Following %s with %s", self.name, shlex.join(self.args))
-            threading.Thread(target=self.reader, args=(self.proc,), daemon=True).start()
-        except OSError as ex:
-            LOG.error("Could not start %s follower: %s", self.name, ex)
-
-    def reader(self, proc):
-        try:
-            for line in proc.stdout:
-                warned = False
-                while not self.stopped.is_set():
-                    try:
-                        self.out.put((self.name, line.rstrip("\n")), timeout=1)
-                        break
-                    except queue.Full:
-                        if not warned:
-                            LOG.warning("Log queue full: waiting to deliver %s events", self.name)
-                            warned = True
-                else:
-                    return
-        finally:
-            proc.stdout.close()
-
-    def close(self):
-        self.stopped.set()
-        if self.proc and self.proc.poll() is None:
-            self.proc.terminate()
+        if self.fp is not None:
+            if not self._drain():
+                return
+            self._read()
+            if not self._drain():
+                return
+        if self.resolve():
+            super().step()
 
 
 def validate_source(source, name):
@@ -453,10 +458,7 @@ def follower(source, name, out):
     if kind == "file":
         return FileFollower(source["path"], name, out)
     if kind == "docker":
-        container = source["container"]
-        path = source["path"]
-        # tail -F handles log rotation, but requires tail inside the container.
-        return CommandFollower(["docker", "exec", container, "tail", "-n", "0", "-F", path], name, out)
+        return DockerFollower(source["container"], source["path"], name, out)
 
 
 def audit_append(path, event):
@@ -518,10 +520,41 @@ class AddressMonitor:
     def __init__(self, server_ips):
         self.server_ips = server_ips
         self.next_check = 0
+        self.changes = None
+
+    def watch(self):
+        changes = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW | socket.SOCK_NONBLOCK,
+                                socket.NETLINK_ROUTE)
+        try:
+            changes.bind((0, 0x1 | 0x10 | 0x100))
+        except OSError:
+            changes.close()
+            raise
+        self.changes = changes
+
+    def changed(self):
+        if self.changes is None:
+            return False
+        changed = False
+        try:
+            while self.changes.recv(65536):
+                changed = True
+        except BlockingIOError:
+            pass
+        except OSError as exc:
+            LOG.warning("Node address notification failed; refreshing addresses: %s", exc)
+            changed = True
+        return changed
+
+    def close(self):
+        if self.changes is not None:
+            self.changes.close()
+            self.changes = None
 
     def refresh(self, *, initial=False):
         now = time.monotonic()
-        if not initial and now < self.next_check:
+        changed = self.changed()
+        if not initial and not changed and now < self.next_check:
             return False
         self.next_check = now + NETWORK_REFRESH_SECONDS
         try:
@@ -529,8 +562,10 @@ class AddressMonitor:
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
             if initial:
                 raise
+            if self.changes is not None:
+                self.next_check = now + 1
             LOG.error("Node address check failed; keeping server_ips=%s; retry_in=%ds: %s",
-                      sorted(self.server_ips), NETWORK_REFRESH_SECONDS, exc)
+                      sorted(self.server_ips), self.next_check - now, exc)
             return False
         previous = sorted(self.server_ips)
         changed = current != self.server_ips
@@ -1001,7 +1036,8 @@ def effective_settings(cfg, server_ips, mode):
     settings = {
         "mode": mode, "server_ips": sorted(server_ips), "server_ips_detection": "automatic",
         "inspection": {"interface": interface} if interface else {"type": "mark"},
-        "network_refresh_seconds": NETWORK_REFRESH_SECONDS, **sources,
+        "network_refresh_seconds": NETWORK_REFRESH_SECONDS,
+        "network_change_watch": bool(interface), **sources,
         "log_size_check": {"enabled": cfg["access"].get("type") == "docker",
                            "interval_seconds": NETWORK_REFRESH_SECONDS,
                            "minimum_bytes": log_maintenance.MIN_LOG_BYTES,
@@ -1026,6 +1062,17 @@ def effective_settings(cfg, server_ips, mode):
     return settings
 
 
+def notify_ready():
+    address = os.environ.get("NOTIFY_SOCKET")
+    if not address:
+        return
+    if address.startswith("@"):
+        address = "\0" + address[1:]
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as notification:
+        notification.connect(address)
+        notification.sendall(b"READY=1")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Standalone Xray P2P connection guard (no panel APIs)")
     parser.add_argument("--config", required=True)
@@ -1046,8 +1093,11 @@ def main():
     server_ips = set()
     network = AddressMonitor(server_ips)
     try:
+        if inspection_interface(cfg):
+            network.watch()
         network.refresh(initial=True)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        network.close()
         parser.exit(1, f"[guard] Cannot detect node addresses: {exc}\n")
     firewall = Firewall(cfg["firewall"], server_ips)
     LOG.info("Startup settings: %s", json.dumps(effective_settings(cfg, server_ips, args.mode),
@@ -1062,7 +1112,7 @@ def main():
     followers = [follower(cfg["access"], "access", out), follower(cfg["eve"], "eve", out)]
     correlator = Correlator(cfg, server_ips, args.mode, firewall)
     logs = LogSizeMonitor(cfg["access"])
-    LOG.info("Started mode=%s, network=host, ban=%ds", args.mode, BAN_SECONDS)
+    ready = False
     try:
         logs.refresh(initial=True)
         while True:
@@ -1070,6 +1120,11 @@ def main():
             logs.refresh()
             for f in followers:
                 f.step()
+            network.refresh()
+            if not ready and all(source.fp is not None for source in followers):
+                notify_ready()
+                LOG.info("Started mode=%s, network=host, ban=%ds", args.mode, BAN_SECONDS)
+                ready = True
             for _ in range(15000):
                 try:
                     src, line = out.get_nowait()
@@ -1084,6 +1139,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        network.close()
         logs.close()
         for f in followers:
             f.close()
