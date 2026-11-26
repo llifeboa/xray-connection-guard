@@ -18,6 +18,21 @@ def config():
 
 
 class NetworkTests(unittest.TestCase):
+    def test_inspection_defaults_to_mark_and_reports_selected_interface(self):
+        cfg = config()
+        g.validate(cfg)
+        self.assertEqual(g.effective_settings(cfg, set(), "monitor")["inspection"], {"type": "mark"})
+        cfg["inspection"] = {"interface": "xray-guard"}
+        g.validate(cfg)
+        self.assertEqual(g.effective_settings(cfg, set(), "monitor")["inspection"], cfg["inspection"])
+
+    def test_invalid_inspection_selection_is_rejected(self):
+        for selection in (None, [], "tun", {"interface": None}, {"interface": "lo"}, {"interface": "a/b"}):
+            cfg = config()
+            cfg["inspection"] = selection
+            with self.subTest(selection=selection), self.assertRaises(ValueError):
+                g.validate(cfg)
+
     def test_local_addresses_include_ipv4_ipv6_and_nat_addresses(self):
         document = [{"addr_info": [
             {"family": "inet", "local": "192.0.2.10"},

@@ -133,6 +133,28 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(self.config_path.read_bytes(), original)
         self.assertFalse((self.folder / "xray-timezone.tzif").exists())
 
+    def test_interface_selection_is_saved_preserved_and_can_return_to_mark(self):
+        source = {"type": "file", "path": "/var/log/xray/access.log"}
+        with mock.patch.object(c, "processes", return_value=[self.process]), \
+             mock.patch.object(c, "containers", return_value=[]), \
+             mock.patch.object(c, "discover_source", return_value=(source, self.process)):
+            c.configure(self.config_path, inspection_interface="xray-guard")
+            c.configure(self.config_path)
+            config = json.loads(self.config_path.read_text())
+            self.assertEqual(config["inspection"], {"interface": "xray-guard"})
+            self.assertEqual(config["min_distinct_flows"], 7)
+            c.configure(self.config_path, inspection_mark=True)
+            self.assertNotIn("inspection", json.loads(self.config_path.read_text()))
+
+    def test_invalid_interface_does_not_change_config_or_timezone(self):
+        original = self.config_path.read_bytes()
+        with mock.patch.object(c, "discover_source", return_value=(
+                {"type": "file", "path": "/access.log"}, self.process)):
+            with self.assertRaisesRegex(ValueError, "inspection.interface"):
+                c.configure(self.config_path, inspection_interface='tun"; accept')
+        self.assertEqual(self.config_path.read_bytes(), original)
+        self.assertFalse((self.folder / "xray-timezone.tzif").exists())
+
     def test_install_can_defer_detection_until_xray_starts(self):
         original = self.config_path.read_bytes()
         with mock.patch.object(c, "processes", return_value=[]), \

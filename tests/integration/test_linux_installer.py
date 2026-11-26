@@ -33,7 +33,7 @@ def main():
     root = Path(__file__).resolve().parents[2]
     run(["mount", "--make-rprivate", "/"])
     # All installer destinations are hidden by private tmpfs mounts before mkdir/write.
-    for destination in ("/etc", "/opt", "/var/log"):
+    for destination in ("/etc", "/opt", "/var/log", "/run"):
         run(["mount", "-t", "tmpfs", "tmpfs", destination])
     Path("/etc/passwd").write_text("root:x:0:0:root:/root:/bin/sh\n")
     Path("/etc/group").write_text("root:x:0:\n")
@@ -72,7 +72,8 @@ if args[0] == 'show':
     print('{ path=' + binary + ' ; argv[]=' + binary + ' -c /etc/xray-ndpi/suricata.yaml -q 0 ; }')
 elif args[0] == 'list-unit-files':
     print('xray-p2p-guard.service enabled')
-elif args[:2] == ['reload-or-restart', 'xray-connection-guard-queue.service']:
+elif args[:2] == ['restart', 'xray-connection-guard-queue.service']:
+    subprocess.run(['/usr/bin/python3', '-B', '/opt/xray-connection-guard/inspector.py', 'queue-off'], check=True)
     subprocess.run(['/usr/bin/python3', '-B', '/opt/xray-connection-guard/inspector.py', 'queue'], check=True)
 """)
         forbidden = commands / "apt-get"
@@ -107,6 +108,7 @@ elif args[:2] == ['reload-or-restart', 'xray-connection-guard-queue.service']:
         command = ["bash", str(root / "manage.sh")]
         run(command + ["install"], env=env)
         assert Path("/opt/xray-connection-guard/log_maintenance.py").is_file()
+        assert Path("/opt/xray-connection-guard/tun_network.py").is_file()
         cfg_path = Path("/etc/xray-connection-guard/config.json")
         cfg = json.loads(cfg_path.read_text())
         cfg["firewall"]["tcp_ports"] = [8443]
@@ -137,6 +139,30 @@ elif args[:2] == ['reload-or-restart', 'xray-connection-guard-queue.service']:
         assert len(rules) == 3, 'Repeated enable must not duplicate inspection rules'
         mode = (unit_dir / "xray-connection-guard.service.d/mode.conf").read_text()
         assert '--mode enforce --allow-ban' in mode
+        run(["ip", "tuntap", "add", "dev", "xray-guard", "mode", "tun"])
+        run(["ip", "address", "add", "198.18.0.1/30", "dev", "xray-guard"])
+        run(["ip", "link", "set", "xray-guard", "up"])
+        run(command + ["enable", "--inspection-interface", "xray-guard"], env=env)
+        if shutil.which("systemd-analyze"):
+            run(["systemd-analyze", "verify", str(unit_dir / "xray-ndpi.service"),
+                 str(unit_dir / inspector.QUEUE_UNIT), str(unit_dir / "xray-connection-guard.service")])
+        run(command + ["enable"], env=env)
+        assert json.loads(cfg_path.read_text())["inspection"] == {"interface": "xray-guard"}
+        assert json.loads(Path("/etc/xray-connection-guard/inspection.json").read_text())["interface"] == "xray-guard"
+        selected_rules = run(["nft", "list", "table", "inet", inspector.TABLE]).stdout
+        assert 'oifname "xray-guard"' in selected_rules and 'iifname "xray-guard"' in selected_rules
+        selected_table = json.loads(run(["nft", "-j", "list", "table", "inet", inspector.TABLE]).stdout)
+        assert len([entry for entry in selected_table["nftables"] if "rule" in entry]) == 2, selected_rules
+        assert "mark" not in selected_rules, selected_rules
+        assert len(json.loads(run(["ip", "-4", "-j", "route", "show", "table", "14817"]).stdout)) == 1
+        assert len([rule for rule in json.loads(run(["ip", "-4", "-j", "rule", "show"]).stdout)
+                    if rule.get("priority") == 14817]) == 1
+        assert Path("/proc/sys/net/ipv4/conf/xray-guard/rp_filter").read_text().strip() == "2"
+        run(command + ["enable", "--inspection-mark"], env=env)
+        assert "inspection" not in json.loads(cfg_path.read_text())
+        assert json.loads(Path("/etc/xray-connection-guard/inspection.json").read_text())["mark"] == inspector.MARK
+        assert "ct mark" in run(["nft", "list", "table", "inet", inspector.TABLE]).stdout
+        assert not inspector.tun_network.routes()
         previous = {str(path): path.read_bytes() for path in (
             unit_dir / "xray-ndpi.service", unit_dir / inspector.QUEUE_UNIT,
             Path("/etc/xray-connection-guard/suricata.yaml"))}
@@ -149,7 +175,7 @@ elif args[:2] == ['reload-or-restart', 'xray-connection-guard-queue.service']:
         calls = log.read_text()
         assert 'restart xray-ndpi.service' in calls
         assert 'restart xray-connection-guard' in calls
-        assert calls.index('disable --now xray-p2p-guard.service') < calls.index('reload-or-restart xray-connection-guard-queue.service')
+        assert calls.index('disable --now xray-p2p-guard.service') < calls.index('restart xray-connection-guard-queue.service')
         print('PASS: install/enable/off; real Xray process discovery with an idle log and automatic timezone; '
               'automatic files and service dependencies; config preserved; '
               'real nft rules installed without duplicates; failed preflight preserves inspector. '

@@ -1,0 +1,37 @@
+{
+  "inbounds": [
+    {
+      "tag": "GUARD_TUN_IN",
+      "protocol": "tun",
+      "settings": {
+        "name": "xray-guard",
+        "mtu": 1500,
+        "gateway": ["198.18.0.1/30"]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "INSPECT_VIA_TUN",
+      "protocol": "freedom",
+      "streamSettings": {
+        "sockopt": {
+          "interface": "xray-guard",
+          "domainStrategy": "ForceIPv4"
+        }
+      }
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "inboundTag": ["GUARD_TUN_IN"],
+        "outboundTag": "TO_FREEDOM"
+      },
+      {
+        "inboundTag": ["PUBLIC_RU_IN_2"],
+        "outboundTag": "INSPECT_VIA_TUN"
+      }
+    ]
+  }
+}

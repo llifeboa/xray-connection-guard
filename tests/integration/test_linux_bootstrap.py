@@ -4,6 +4,7 @@
 Package writes use private overlays; the test never starts host services.
 Internet access is needed to download build dependencies. No firewall changes are made.
 """
+import argparse
 import json
 import os
 import subprocess
@@ -21,6 +22,11 @@ def run(args, **kwargs):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tun", action="store_true", help="Also test native Xray TUN with live NFQUEUE")
+    parser.add_argument("--xray", default="/usr/local/bin/xray")
+    parser.add_argument("--tun-output", type=Path, help="Keep TUN diagnostics in a new directory")
+    args = parser.parse_args()
     if os.readlink("/proc/self/ns/mnt") == os.readlink("/proc/1/ns/mnt"):
         raise SystemExit("Refusing host writes: unshare --mount is required")
     root = Path(__file__).resolve().parents[2]
@@ -65,6 +71,10 @@ def main():
         assert inspector.supported(binary)
         run(["python3", "-B", str(paths.helper), "check"], env=env)
         check_capture(binary, config)
+        if args.tun:
+            output = ["--output", str(args.tun_output.resolve())] if args.tun_output else []
+            run(["unshare", "--net", "python3", "-B", str(root / "tests/integration/test_linux_tun.py"),
+                 "--xray", args.xray, "--binary", binary, "--suricata-config", str(paths.yaml), *output], env=env)
         original_state = paths.state.read_bytes()
         engines = sorted(Path(binary).parents[2].iterdir())
         original_log = (logs / "install-suricata.log").read_bytes()

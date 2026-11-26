@@ -30,7 +30,7 @@ start_inspector() {
   systemctl daemon-reload
   stop_old
   systemctl enable "$INSPECTOR_UNIT"
-  systemctl reload-or-restart "$QUEUE_UNIT"
+  systemctl restart "$QUEUE_UNIT"
   systemctl restart "$INSPECTOR_UNIT"
   systemctl is-active --quiet "$INSPECTOR_UNIT" || { journalctl -u "$INSPECTOR_UNIT" -n 50 --no-pager; exit 1; }
 }
@@ -66,6 +66,7 @@ case "$OP" in
     install -m 755 "$ROOT/src/guard.py" "$SCRIPT"
     install -m 755 "$ROOT/src/log_maintenance.py" /opt/xray-connection-guard/log_maintenance.py
     install -m 755 "$ROOT/src/inspector.py" "$INSPECTOR"
+    install -m 755 "$ROOT/src/tun_network.py" /opt/xray-connection-guard/tun_network.py
     install -m 755 "$ROOT/src/install_suricata.py" /opt/xray-connection-guard/install_suricata.py
     install -m 755 "$ROOT/src/configure_guard.py" "$CONFIGURATOR"
     if [[ ! -f "$CFG" ]]; then
@@ -124,7 +125,7 @@ PY
     python3 /opt/xray-connection-guard/install_suricata.py --config "$CFG"
     install -m 644 "$ROOT/systemd/xray-connection-guard.service" /etc/systemd/system/xray-connection-guard.service
     systemctl daemon-reload
-    echo '[guard] Installed, including automatic guard configuration, Suricata/nDPI and NFQUEUE. Apply Xray log settings and mark=1481785689, then run enable.'
+    echo '[guard] Installed. Apply Xray logging and mark=1481785689, or use enable --inspection-interface NAME for TUN inspection.'
     ;;
   monitor)
     python3 "$CONFIGURATOR" --config "$CFG" "${@:2}"
@@ -165,6 +166,7 @@ PY
     ;;
   *)
     echo 'Usage: sudo bash manage.sh install|monitor|enable|off|status|bans'
+    echo 'Options: --container NAME; --inspection-interface NAME or --inspection-mark'
     exit 2
     ;;
 esac

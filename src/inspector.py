@@ -14,6 +14,9 @@ from pathlib import Path
 
 import yaml
 
+import guard
+import tun_network
+
 MARK = 1481785689  # 0x58524159, XRAY
 QUEUE = 0
 SID = 9100001
@@ -33,6 +36,7 @@ class Paths:
         self.units = root / "etc/systemd/system"
         self.helper = root / "opt/xray-connection-guard/inspector.py"
         self.log = root / "var/log/xray-ndpi"
+        self.network = root / "run/xray-connection-guard/tun-network.json"
 
 
 def run(args, *, data=None, check=True):
@@ -189,9 +193,30 @@ WantedBy=multi-user.target
 """
 
 
-def queue_unit(paths):
+def queue_unit(paths, interface=None):
+    if interface:
+        return f"""[Unit]
+Description=Xray NFQUEUE and automatic IPv4 TUN routing
+Before=xray-ndpi.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -B {unit_path(paths.helper)} queue-watch
+ExecStartPost=/usr/bin/python3 -B {unit_path(paths.helper)} network-ready
+ExecReload=/usr/bin/python3 -B {unit_path(paths.helper)} queue
+ExecStopPost=/usr/bin/python3 -B {unit_path(paths.helper)} queue-off
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=90
+RuntimeDirectory=xray-connection-guard
+RuntimeDirectoryMode=0700
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+"""
     return f"""[Unit]
-Description=Marked Xray traffic to Suricata NFQUEUE
+Description=Xray traffic to Suricata NFQUEUE
 Before=xray-ndpi.service
 
 [Service]
@@ -220,6 +245,7 @@ def preflight(binary, original):
 
 def prepare(paths, guard_config, engine=None):
     cfg = json.loads(Path(guard_config).read_text(encoding="utf-8"))
+    interface = guard.inspection_interface(cfg)
     source = cfg.get("eve", {})
     if source.get("type", "file") != "file":
         raise RuntimeError("Automatic local inspection requires eve.type=file")
@@ -234,17 +260,37 @@ def prepare(paths, guard_config, engine=None):
     preflight(binary, config)
     paths.config.mkdir(parents=True, exist_ok=True, mode=0o700)
     eve.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
-    state = {"binary": binary, "base": str(base), "mark": MARK, "queue": QUEUE}
+    state = {"binary": binary, "base": str(base), "queue": QUEUE}
+    state.update({"interface": interface} if interface else {"mark": MARK})
     atomic_write(paths.rules, RULE, 0o600)
     atomic_write(paths.yaml, dump_config(config), 0o600)
     atomic_write(paths.state, json.dumps(state, indent=2) + "\n", 0o600)
     atomic_write(paths.units / "xray-ndpi.service", inspector_unit(binary, paths), 0o644)
-    atomic_write(paths.units / QUEUE_UNIT, queue_unit(paths), 0o644)
-    print(f"[inspection] Configured Suricata/nDPI, SID={SID}, mark={MARK}, queue={QUEUE}")
+    atomic_write(paths.units / QUEUE_UNIT, queue_unit(paths, interface), 0o644)
+    selector = f"interface={interface}" if interface else f"mark={MARK}"
+    print(f"[inspection] Configured Suricata/nDPI, SID={SID}, {selector}, queue={QUEUE}")
+
+
+def selected_interface(paths):
+    if not paths.state.is_file():
+        return None
+    state = json.loads(paths.state.read_text(encoding="utf-8"))
+    return guard.inspection_interface({"inspection": state})
+
+
+def check_interface(interface):
+    if interface is None:
+        return
+    addresses = json.loads(run(["ip", "-j", "address", "show", "dev", interface]).stdout)
+    if (len(addresses) != 1 or "UP" not in addresses[0].get("flags", []) or
+            not any(address.get("scope") == "global" and address.get("family") in ("inet", "inet6")
+                    for address in addresses[0].get("addr_info", []))):
+        raise RuntimeError(f"Inspection interface {interface} must be UP with an assigned global-scope IP")
 
 
 def check(paths):
     state = json.loads(paths.state.read_text(encoding="utf-8"))
+    check_interface(selected_interface(paths))
     run([state["binary"], "-T", "-c", str(paths.yaml)])
 
 
@@ -261,7 +307,21 @@ def wait_ready():
     raise RuntimeError(f"Suricata did not open NFQUEUE {QUEUE}")
 
 
-def queue_rules():
+def queue_rules(interface=None):
+    if interface is not None:
+        guard.inspection_interface({"inspection": {"interface": interface}})
+        return f"""table inet {TABLE} {{
+    comment "{OWNER}"
+    chain output {{
+        type filter hook output priority 10; policy accept;
+        meta l4proto {{ tcp, udp }} oifname "{interface}" counter queue num {QUEUE}
+    }}
+    chain input {{
+        type filter hook input priority 10; policy accept;
+        meta l4proto {{ tcp, udp }} iifname "{interface}" counter queue num {QUEUE}
+    }}
+}}
+"""
     return f"""table inet {TABLE} {{
     comment "{OWNER}"
     chain output {{
@@ -277,7 +337,10 @@ def queue_rules():
 """
 
 
-def update_queue(remove=False):
+def update_queue(remove=False, paths=None, check_device=True):
+    interface = None if remove else selected_interface(paths or Paths())
+    if not remove and check_device:
+        check_interface(interface)
     result = run(["nft", "list", "table", "inet", TABLE], check=False)
     prefix = ""
     if result.returncode == 0:
@@ -290,14 +353,44 @@ def update_queue(remove=False):
         if prefix:
             run(["nft", "-f", "-"], data=prefix)
         return
-    batch = prefix + queue_rules()
+    batch = prefix + queue_rules(interface)
     run(["nft", "-c", "-f", "-"], data=batch)
     run(["nft", "-f", "-"], data=batch)
 
 
+def watch_network(paths):
+    network = tun_network.Network(paths.network)
+    last_error = None
+    while True:
+        try:
+            interface = selected_interface(paths)
+            if interface:
+                network.ensure(interface)
+            last_error = None
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+            if str(exc) != last_error:
+                print(f"[inspection] Waiting for IPv4 TUN: {exc}", flush=True)
+                last_error = str(exc)
+        time.sleep(1)
+
+
+def wait_network(paths):
+    interface = selected_interface(paths)
+    if not interface:
+        raise RuntimeError("No inspection interface configured")
+    network = tun_network.Network(paths.network)
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        if network.ready(interface):
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"IPv4 TUN routing for {interface} is not ready; check {QUEUE_UNIT} logs")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("install", "check", "ready", "queue", "queue-off"))
+    parser.add_argument("action", choices=("install", "check", "ready", "queue", "queue-off",
+                                          "queue-watch", "network-ready"))
     parser.add_argument("--config", default="/etc/xray-connection-guard/config.json")
     args = parser.parse_args()
     if os.geteuid() != 0:
@@ -310,8 +403,19 @@ def main():
             check(paths)
         elif args.action == "ready":
             wait_ready()
+        elif args.action == "queue-watch":
+            update_queue(paths=paths, check_device=False)
+            watch_network(paths)
+        elif args.action == "network-ready":
+            wait_network(paths)
+        elif args.action == "queue-off":
+            tun_network.Network(paths.network).clear()
+            update_queue(remove=True, paths=paths)
         else:
-            update_queue(remove=args.action == "queue-off")
+            update_queue(paths=paths)
+            interface = selected_interface(paths)
+            if interface:
+                tun_network.Network(paths.network).ensure(interface)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, yaml.YAMLError) as exc:
         raise SystemExit(f"[inspection] {exc}") from exc
 

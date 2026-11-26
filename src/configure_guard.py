@@ -211,13 +211,17 @@ def timezone(process):
     return "UTC", None
 
 
-def configure(path, container=None):
+def configure(path, container=None, inspection_interface=None, inspection_mark=False):
     path = path.resolve()
     config = json.loads(path.read_text(encoding="utf-8"))
     selected = container or config.get("xray_container")
     source, process = discover_source(processes(), containers(), selected)
     label, data = timezone(process)
     updated = copy.deepcopy(config)
+    if inspection_interface is not None:
+        updated["inspection"] = {"interface": inspection_interface}
+    elif inspection_mark:
+        updated.pop("inspection", None)
     updated.update(access=source, xray_timezone="UTC", xray_timezone_name=label)
     if container:
         updated["xray_container"] = container
@@ -243,12 +247,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="/etc/xray-connection-guard/config.json", type=Path)
     parser.add_argument("--container", help="Select a node if several Xray containers are running")
+    inspection = parser.add_mutually_exclusive_group()
+    inspection.add_argument("--inspection-interface", metavar="NAME",
+                            help="Inspect INPUT/OUTPUT on a TUN interface instead of marked sockets")
+    inspection.add_argument("--inspection-mark", action="store_true",
+                            help="Switch back to the default SO_MARK inspection")
     parser.add_argument("--defer", action="store_true", help="Allow detection to wait until enable")
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error("Run as root")
     try:
-        configure(args.config, args.container)
+        configure(args.config, args.container, args.inspection_interface, args.inspection_mark)
     except DiscoveryError as exc:
         if args.defer:
             print(f"[guard config] Detection deferred until enable: {exc}")

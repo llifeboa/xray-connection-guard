@@ -615,9 +615,23 @@ class LogSizeMonitor:
             self.worker.join(timeout=1)
 
 
+def inspection_interface(cfg):
+    inspection = cfg.get("inspection", {})
+    if not isinstance(inspection, dict):
+        raise ValueError("inspection must be an object")
+    if "interface" not in inspection:
+        return None
+    interface = inspection["interface"]
+    if (not isinstance(interface, str) or
+            not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,14}", interface) or interface == "lo"):
+        raise ValueError("inspection.interface must be a non-loopback Linux interface name (1-15 characters)")
+    return interface
+
+
 def validate(cfg):
     if not isinstance(cfg, dict):
         raise ValueError("Config must be an object")
+    inspection_interface(cfg)
     for name in ("eve", "access", "firewall"):
         if name not in cfg:
             raise ValueError(f"Missing config field: {name}")
@@ -977,6 +991,7 @@ class Correlator:
 
 
 def effective_settings(cfg, server_ips, mode):
+    interface = inspection_interface(cfg)
     sources = {}
     for name in ("access", "eve"):
         source = cfg[name]
@@ -985,6 +1000,7 @@ def effective_settings(cfg, server_ips, mode):
             sources[name]["container"] = source["container"]
     settings = {
         "mode": mode, "server_ips": sorted(server_ips), "server_ips_detection": "automatic",
+        "inspection": {"interface": interface} if interface else {"type": "mark"},
         "network_refresh_seconds": NETWORK_REFRESH_SECONDS, **sources,
         "log_size_check": {"enabled": cfg["access"].get("type") == "docker",
                            "interval_seconds": NETWORK_REFRESH_SECONDS,

@@ -89,6 +89,20 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertEqual(self.paths.rules.read_text().count(f"sid:{i.SID};"), 1)
 
+    def test_interface_selection_survives_install_and_replaces_mark_selection(self):
+        config = json.loads(self.config.read_text())
+        config["inspection"] = {"interface": "xray-guard"}
+        self.config.write_text(json.dumps(config))
+        with mock.patch.object(i, "run"):
+            i.prepare(self.paths, self.config)
+        state = json.loads(self.paths.state.read_text())
+        self.assertEqual(state["interface"], "xray-guard")
+        self.assertNotIn("mark", state)
+        self.assertEqual(i.selected_interface(self.paths), "xray-guard")
+        with mock.patch.object(i, "check_interface") as check, mock.patch.object(i, "run"):
+            i.check(self.paths)
+        check.assert_called_once_with("xray-guard")
+
     def test_incompatible_log_or_sid_is_rejected_before_preflight(self):
         for cfg in ({"eve": {"type": "docker", "path": "/eve"}},
                     {"eve": {"path": "relative/eve.json"}},
@@ -113,6 +127,16 @@ class InstallerTests(unittest.TestCase):
         guard_unit = (Path(__file__).resolve().parents[2] / "systemd" /
                       "xray-connection-guard.service").read_text()
         self.assertIn("Requires=xray-ndpi.service", guard_unit)
+
+    def test_tun_service_waits_for_ipv4_routing_and_cleans_up_after_watcher_stops(self):
+        unit = i.queue_unit(self.paths, "xray-guard")
+        self.assertIn("Type=simple\n", unit)
+        self.assertIn(" queue-watch\n", unit)
+        self.assertIn(" network-ready\n", unit)
+        self.assertIn("ExecStopPost=", unit)
+        self.assertIn(" queue-off\n", unit)
+        self.assertIn("Restart=on-failure\n", unit)
+        self.assertNotIn("ExecStop=", unit)
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -186,6 +210,47 @@ class QueueTests(unittest.TestCase):
              mock.patch.object(i.time, "sleep") as sleep:
             i.wait_ready()
         sleep.assert_called_once()
+
+    def test_interface_rules_capture_both_directions_without_mark_or_bypass(self):
+        rules = i.queue_rules("xray-guard")
+        self.assertIn('oifname "xray-guard"', rules)
+        self.assertIn('iifname "xray-guard"', rules)
+        self.assertEqual(rules.count(f"queue num {i.QUEUE}"), 2)
+        self.assertNotIn("mark", rules)
+        self.assertNotIn("bypass", rules)
+        self.assertIn("hook output", rules)
+        self.assertIn("hook input", rules)
+
+    def test_invalid_interface_is_rejected_before_rendering_rules(self):
+        for interface in ("", "lo", "too-long-interface", 'tun"; accept', "../tun", 123):
+            with self.subTest(interface=interface), self.assertRaises(ValueError):
+                i.queue_rules(interface)
+
+    def test_interface_readiness_requires_an_up_addressed_device(self):
+        valid = [{"flags": ["UP"], "addr_info": [{"family": "inet", "scope": "global"}]}]
+        for addresses in ([], [{"flags": []}], [{"flags": ["UP"], "addr_info": []}], valid):
+            with self.subTest(addresses=addresses), mock.patch.object(i, "run", return_value=mock.Mock(
+                    stdout=json.dumps(addresses))):
+                if addresses == valid:
+                    i.check_interface("xray-guard")
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "must be UP"):
+                        i.check_interface("xray-guard")
+
+    def test_update_uses_persisted_interface_and_removal_does_not_require_device(self):
+        with tempfile.TemporaryDirectory() as folder:
+            paths = i.Paths(Path(folder))
+            paths.config.mkdir(parents=True)
+            paths.state.write_text(json.dumps({"interface": "xray-guard"}))
+            with mock.patch.object(i, "check_interface") as check, mock.patch.object(i, "run", side_effect=[
+                    self.owned(), mock.Mock(), mock.Mock()]) as commands:
+                i.update_queue(paths=paths)
+            check.assert_called_once_with("xray-guard")
+            self.assertIn('oifname "xray-guard"', commands.call_args.kwargs["data"])
+            with mock.patch.object(i, "check_interface") as check, mock.patch.object(
+                    i, "run", side_effect=[self.owned(), mock.Mock()]):
+                i.update_queue(remove=True, paths=paths)
+            check.assert_not_called()
 
 
 if __name__ == "__main__":

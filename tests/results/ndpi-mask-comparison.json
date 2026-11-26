@@ -1,0 +1,1017 @@
+{
+  "note": "Local offline single-CPU replay; not an inline server benchmark.",
+  "cpu_affinity": [
+    0
+  ],
+  "correctness": {
+    "all": {
+      "metrics": {
+        "cpu_seconds": 0.141338,
+        "user_seconds": 0.091679,
+        "system_seconds": 0.049658999999999995,
+        "wall_seconds": 0.16923310302081518,
+        "alert_count": 162,
+        "alert_flows": 6
+      },
+      "cases": {
+        "bittorrent_tcp_ipv4": {
+          "expected_bittorrent": true,
+          "alerts": 47,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "bittorrent_tcp_ipv6": {
+          "expected_bittorrent": true,
+          "alerts": 47,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "dht_ipv4": {
+          "expected_bittorrent": true,
+          "alerts": 17,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "dht_ipv6": {
+          "expected_bittorrent": true,
+          "alerts": 17,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "utp_ipv4": {
+          "expected_bittorrent": true,
+          "alerts": 17,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "utp_ipv6": {
+          "expected_bittorrent": true,
+          "alerts": 17,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "http_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "HTTP"
+          ]
+        },
+        "http_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "HTTP"
+          ]
+        },
+        "tls_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "TLS"
+          ]
+        },
+        "tls_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "TLS"
+          ]
+        },
+        "dns_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "DNS"
+          ]
+        },
+        "dns_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "DNS"
+          ]
+        },
+        "ntp_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "NTP"
+          ]
+        },
+        "ntp_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "NTP"
+          ]
+        },
+        "unknown_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "unknown_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "http_marker_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "HTTP"
+          ]
+        },
+        "http_marker_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "HTTP"
+          ]
+        }
+      }
+    },
+    "bittorrent": {
+      "metrics": {
+        "cpu_seconds": 0.11500999999999999,
+        "user_seconds": 0.07241399999999999,
+        "system_seconds": 0.042595999999999995,
+        "wall_seconds": 0.12625050300266594,
+        "alert_count": 248,
+        "alert_flows": 8
+      },
+      "cases": {
+        "bittorrent_tcp_ipv4": {
+          "expected_bittorrent": true,
+          "alerts": 47,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "bittorrent_tcp_ipv6": {
+          "expected_bittorrent": true,
+          "alerts": 47,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "dht_ipv4": {
+          "expected_bittorrent": true,
+          "alerts": 17,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "dht_ipv6": {
+          "expected_bittorrent": true,
+          "alerts": 17,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "utp_ipv4": {
+          "expected_bittorrent": true,
+          "alerts": 17,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "utp_ipv6": {
+          "expected_bittorrent": true,
+          "alerts": 17,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "http_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "http_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "tls_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "tls_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "dns_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "dns_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "ntp_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "ntp_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "unknown_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "unknown_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 0,
+          "protocols": [
+            "Unknown"
+          ]
+        },
+        "http_marker_ipv4": {
+          "expected_bittorrent": false,
+          "alerts": 43,
+          "protocols": [
+            "BitTorrent"
+          ]
+        },
+        "http_marker_ipv6": {
+          "expected_bittorrent": false,
+          "alerts": 43,
+          "protocols": [
+            "BitTorrent"
+          ]
+        }
+      }
+    }
+  },
+  "benchmarks": {
+    "new_web_flows": {
+      "flows": 16000,
+      "capture": {
+        "packets": 416000,
+        "ip_bytes": 178861680,
+        "sha256": "8da65368fbf52f6443336e9c1a69c6d64eaad99c47fcf252feed3dcc97459493"
+      },
+      "samples": {
+        "all": [
+          {
+            "cpu_seconds": 1.3491819999999999,
+            "user_seconds": 1.093716,
+            "system_seconds": 0.25546599999999997,
+            "wall_seconds": 1.3706323329824954,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 1.3925340000000002,
+            "user_seconds": 1.057519,
+            "system_seconds": 0.335015,
+            "wall_seconds": 1.4337508350145072,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 1.347407,
+            "user_seconds": 1.037705,
+            "system_seconds": 0.309702,
+            "wall_seconds": 1.3734062099829316,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 1.311299,
+            "user_seconds": 1.024328,
+            "system_seconds": 0.286971,
+            "wall_seconds": 1.3428411050117575,
+            "alert_count": 0,
+            "alert_flows": 0
+          }
+        ],
+        "bittorrent": [
+          {
+            "cpu_seconds": 1.1431,
+            "user_seconds": 0.8890779999999999,
+            "system_seconds": 0.25402199999999997,
+            "wall_seconds": 1.1725815279933158,
+            "alert_count": 4,
+            "alert_flows": 2
+          },
+          {
+            "cpu_seconds": 1.10723,
+            "user_seconds": 0.8514079999999999,
+            "system_seconds": 0.255822,
+            "wall_seconds": 1.1389054270111956,
+            "alert_count": 4,
+            "alert_flows": 2
+          },
+          {
+            "cpu_seconds": 1.256666,
+            "user_seconds": 0.968514,
+            "system_seconds": 0.28815199999999996,
+            "wall_seconds": 1.2915025039983448,
+            "alert_count": 4,
+            "alert_flows": 2
+          },
+          {
+            "cpu_seconds": 1.092457,
+            "user_seconds": 0.897091,
+            "system_seconds": 0.19536599999999998,
+            "wall_seconds": 1.11893490399234,
+            "alert_count": 4,
+            "alert_flows": 2
+          }
+        ]
+      },
+      "median_cpu_seconds": {
+        "all": 1.3482945,
+        "bittorrent": 1.125165
+      },
+      "bittorrent_cpu_change_percent": -16.549018037231477
+    },
+    "udp_flows": {
+      "flows": 20000,
+      "capture": {
+        "packets": 200000,
+        "ip_bytes": 19732980,
+        "sha256": "ef7b5a3b9e5cc6e8b468dc5a1dcc241b56c3a62013e2d7a75089091b885e8329"
+      },
+      "samples": {
+        "all": [
+          {
+            "cpu_seconds": 0.636296,
+            "user_seconds": 0.523535,
+            "system_seconds": 0.112761,
+            "wall_seconds": 0.6513159010210074,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.605043,
+            "user_seconds": 0.50618,
+            "system_seconds": 0.09886299999999999,
+            "wall_seconds": 0.6239613000070676,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.6108330000000001,
+            "user_seconds": 0.535471,
+            "system_seconds": 0.075362,
+            "wall_seconds": 0.6321321009891108,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.6272059999999999,
+            "user_seconds": 0.516056,
+            "system_seconds": 0.11115,
+            "wall_seconds": 0.6501883009914309,
+            "alert_count": 0,
+            "alert_flows": 0
+          }
+        ],
+        "bittorrent": [
+          {
+            "cpu_seconds": 0.40202099999999996,
+            "user_seconds": 0.28141499999999997,
+            "system_seconds": 0.12060599999999999,
+            "wall_seconds": 0.42638709998573177,
+            "alert_count": 2,
+            "alert_flows": 1
+          },
+          {
+            "cpu_seconds": 0.41815199999999997,
+            "user_seconds": 0.33371799999999996,
+            "system_seconds": 0.084434,
+            "wall_seconds": 0.4487192000087816,
+            "alert_count": 2,
+            "alert_flows": 1
+          },
+          {
+            "cpu_seconds": 0.464059,
+            "user_seconds": 0.336043,
+            "system_seconds": 0.128016,
+            "wall_seconds": 0.4832940000051167,
+            "alert_count": 2,
+            "alert_flows": 1
+          },
+          {
+            "cpu_seconds": 0.48620199999999997,
+            "user_seconds": 0.394541,
+            "system_seconds": 0.09166099999999999,
+            "wall_seconds": 0.5072084000275936,
+            "alert_count": 2,
+            "alert_flows": 1
+          }
+        ]
+      },
+      "median_cpu_seconds": {
+        "all": 0.6190195000000001,
+        "bittorrent": 0.4411055
+      },
+      "bittorrent_cpu_change_percent": -28.741259362588746
+    },
+    "long_web_flows": {
+      "flows": 1000,
+      "capture": {
+        "packets": 522000,
+        "ip_bytes": 332553460,
+        "sha256": "db69a42eadca2ce26f48ed8af0eaa570d213580508a9139ffbef040f48981eda"
+      },
+      "samples": {
+        "all": [
+          {
+            "cpu_seconds": 0.7375269999999999,
+            "user_seconds": 0.661781,
+            "system_seconds": 0.075746,
+            "wall_seconds": 0.7551014019991271,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.754254,
+            "user_seconds": 0.641919,
+            "system_seconds": 0.11233499999999999,
+            "wall_seconds": 0.764424399996642,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.720446,
+            "user_seconds": 0.612379,
+            "system_seconds": 0.108067,
+            "wall_seconds": 0.731867300986778,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.692407,
+            "user_seconds": 0.608358,
+            "system_seconds": 0.084049,
+            "wall_seconds": 0.7048387009999715,
+            "alert_count": 0,
+            "alert_flows": 0
+          }
+        ],
+        "bittorrent": [
+          {
+            "cpu_seconds": 0.691985,
+            "user_seconds": 0.5639879999999999,
+            "system_seconds": 0.127997,
+            "wall_seconds": 0.7126547020161524,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.746909,
+            "user_seconds": 0.659038,
+            "system_seconds": 0.08787099999999999,
+            "wall_seconds": 0.7707967030000873,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.71332,
+            "user_seconds": 0.6327189999999999,
+            "system_seconds": 0.08060099999999999,
+            "wall_seconds": 0.7260604999901261,
+            "alert_count": 0,
+            "alert_flows": 0
+          },
+          {
+            "cpu_seconds": 0.686632,
+            "user_seconds": 0.590823,
+            "system_seconds": 0.09580899999999999,
+            "wall_seconds": 0.7048024999967311,
+            "alert_count": 0,
+            "alert_flows": 0
+          }
+        ]
+      },
+      "median_cpu_seconds": {
+        "all": 0.7289865,
+        "bittorrent": 0.7026524999999999
+      },
+      "bittorrent_cpu_change_percent": -3.612412575541535
+    }
+  },
+  "upstream": {
+    "NTPv2.pcap": {
+      "all": {
+        "cpu_seconds": 0.12121199999999999,
+        "user_seconds": 0.08080799999999999,
+        "system_seconds": 0.040403999999999995,
+        "wall_seconds": 0.14095410000300035,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.118852,
+        "user_seconds": 0.079235,
+        "system_seconds": 0.039617,
+        "wall_seconds": 0.12528380000730976,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "NTPv3.pcap": {
+      "all": {
+        "cpu_seconds": 0.12073399999999998,
+        "user_seconds": 0.08451399999999999,
+        "system_seconds": 0.036219999999999995,
+        "wall_seconds": 0.14415100001497194,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.113208,
+        "user_seconds": 0.09369,
+        "system_seconds": 0.019518,
+        "wall_seconds": 0.12385119998361915,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "NTPv4.pcap": {
+      "all": {
+        "cpu_seconds": 0.127556,
+        "user_seconds": 0.081172,
+        "system_seconds": 0.046383999999999995,
+        "wall_seconds": 0.1484640999988187,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.107458,
+        "user_seconds": 0.071639,
+        "system_seconds": 0.035819,
+        "wall_seconds": 0.12207260000286624,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "bittorrent.pcap": {
+      "all": {
+        "cpu_seconds": 0.127304,
+        "user_seconds": 0.087522,
+        "system_seconds": 0.039782,
+        "wall_seconds": 0.14538220097892918,
+        "alert_count": 24,
+        "alert_flows": 24
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.109241,
+        "user_seconds": 0.075339,
+        "system_seconds": 0.033902,
+        "wall_seconds": 0.12118060002103448,
+        "alert_count": 24,
+        "alert_flows": 24
+      }
+    },
+    "bittorrent_tcp_miss.pcapng": {
+      "all": {
+        "cpu_seconds": 0.12440599999999999,
+        "user_seconds": 0.072236,
+        "system_seconds": 0.05217,
+        "wall_seconds": 0.14366460000746883,
+        "alert_count": 91,
+        "alert_flows": 1
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.12272799999999999,
+        "user_seconds": 0.076705,
+        "system_seconds": 0.046022999999999994,
+        "wall_seconds": 0.14476370002375916,
+        "alert_count": 91,
+        "alert_flows": 1
+      }
+    },
+    "bittorrent_utp.pcap": {
+      "all": {
+        "cpu_seconds": 0.11757099999999998,
+        "user_seconds": 0.08621899999999999,
+        "system_seconds": 0.031352,
+        "wall_seconds": 0.14194050000514835,
+        "alert_count": 86,
+        "alert_flows": 2
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.109523,
+        "user_seconds": 0.067399,
+        "system_seconds": 0.042123999999999995,
+        "wall_seconds": 0.12234820000594482,
+        "alert_count": 86,
+        "alert_flows": 2
+      }
+    },
+    "dns-exf.pcap": {
+      "all": {
+        "cpu_seconds": 0.115824,
+        "user_seconds": 0.095855,
+        "system_seconds": 0.019969,
+        "wall_seconds": 0.12089140000171028,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.11133299999999999,
+        "user_seconds": 0.079524,
+        "system_seconds": 0.031809,
+        "wall_seconds": 0.12088289999519475,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "dns-google-nsid.pcapng": {
+      "all": {
+        "cpu_seconds": 0.12854,
+        "user_seconds": 0.082929,
+        "system_seconds": 0.045611,
+        "wall_seconds": 0.16113389999372885,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.109342,
+        "user_seconds": 0.058575999999999996,
+        "system_seconds": 0.050766,
+        "wall_seconds": 0.12881029999698512,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "dns-invalid-chars.pcap": {
+      "all": {
+        "cpu_seconds": 0.126952,
+        "user_seconds": 0.084635,
+        "system_seconds": 0.042317,
+        "wall_seconds": 0.14107659997534938,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.112421,
+        "user_seconds": 0.080301,
+        "system_seconds": 0.032119999999999996,
+        "wall_seconds": 0.12078650100738741,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "http-basic-auth.pcap": {
+      "all": {
+        "cpu_seconds": 0.12095600000000001,
+        "user_seconds": 0.068038,
+        "system_seconds": 0.052918,
+        "wall_seconds": 0.14207030000397936,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.122944,
+        "user_seconds": 0.086061,
+        "system_seconds": 0.036883,
+        "wall_seconds": 0.14099909999640658,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "http-crash-content-disposition.pcap": {
+      "all": {
+        "cpu_seconds": 0.129442,
+        "user_seconds": 0.093037,
+        "system_seconds": 0.036405,
+        "wall_seconds": 0.14746040001045913,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.109582,
+        "user_seconds": 0.068996,
+        "system_seconds": 0.040586,
+        "wall_seconds": 0.12088750000111759,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "http-lines-split.pcap": {
+      "all": {
+        "cpu_seconds": 0.11918599999999999,
+        "user_seconds": 0.065758,
+        "system_seconds": 0.053427999999999996,
+        "wall_seconds": 0.12421350000659004,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.10755200000000001,
+        "user_seconds": 0.075685,
+        "system_seconds": 0.031867,
+        "wall_seconds": 0.12086409999756142,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "quic-23.pcap": {
+      "all": {
+        "cpu_seconds": 0.122608,
+        "user_seconds": 0.091956,
+        "system_seconds": 0.030652,
+        "wall_seconds": 0.1408934000064619,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.102853,
+        "user_seconds": 0.072378,
+        "system_seconds": 0.030475,
+        "wall_seconds": 0.12088770000264049,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "quic-24.pcap": {
+      "all": {
+        "cpu_seconds": 0.121758,
+        "user_seconds": 0.076099,
+        "system_seconds": 0.045659,
+        "wall_seconds": 0.1459886000084225,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.10869599999999999,
+        "user_seconds": 0.068438,
+        "system_seconds": 0.040257999999999995,
+        "wall_seconds": 0.12087910002446733,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "quic-27.pcap": {
+      "all": {
+        "cpu_seconds": 0.115148,
+        "user_seconds": 0.069911,
+        "system_seconds": 0.045237,
+        "wall_seconds": 0.12341980100609362,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.10485799999999999,
+        "user_seconds": 0.07259399999999999,
+        "system_seconds": 0.032264,
+        "wall_seconds": 0.12079729998367839,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "tls-appdata.pcap": {
+      "all": {
+        "cpu_seconds": 0.124635,
+        "user_seconds": 0.091399,
+        "system_seconds": 0.033236,
+        "wall_seconds": 0.14092299999902025,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.11366899999999999,
+        "user_seconds": 0.073073,
+        "system_seconds": 0.040596,
+        "wall_seconds": 0.14388700100244023,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "tls-esni-fuzzed.pcap": {
+      "all": {
+        "cpu_seconds": 0.12227299999999999,
+        "user_seconds": 0.09374299999999999,
+        "system_seconds": 0.02853,
+        "wall_seconds": 0.14094460001797415,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.11101299999999999,
+        "user_seconds": 0.07656099999999999,
+        "system_seconds": 0.034451999999999997,
+        "wall_seconds": 0.12074840100831352,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    },
+    "tls-rdn-extract.pcap": {
+      "all": {
+        "cpu_seconds": 0.119167,
+        "user_seconds": 0.08341699999999999,
+        "system_seconds": 0.03575,
+        "wall_seconds": 0.1422418000001926,
+        "alert_count": 0,
+        "alert_flows": 0
+      },
+      "bittorrent": {
+        "cpu_seconds": 0.105575,
+        "user_seconds": 0.076014,
+        "system_seconds": 0.029560999999999997,
+        "wall_seconds": 0.12101079997955821,
+        "alert_count": 0,
+        "alert_flows": 0
+      }
+    }
+  },
+  "synthetic_capture": {
+    "packets": 600,
+    "ip_bytes": 141214,
+    "sha256": "da551b801c9d9a02fc1501bef77e2650e09f5c12861e081e66c5ab57a87e935a"
+  },
+  "correctness_summary": {
+    "added_bittorrent_cases": [
+      "http_marker_ipv4",
+      "http_marker_ipv6"
+    ],
+    "lost_bittorrent_cases": [],
+    "missed_expected_bittorrent": {
+      "all": [],
+      "bittorrent": []
+    },
+    "benign_alert_cases": {
+      "all": [],
+      "bittorrent": [
+        "http_marker_ipv4",
+        "http_marker_ipv6"
+      ]
+    }
+  },
+  "startup_overhead": {
+    "note": "One UDP packet estimates initialization and shutdown cost.",
+    "samples": {
+      "all": [
+        {
+          "cpu_seconds": 0.11558199999999999,
+          "user_seconds": 0.088613,
+          "system_seconds": 0.026969,
+          "wall_seconds": 0.12726629999815486,
+          "alert_count": 0,
+          "alert_flows": 0
+        },
+        {
+          "cpu_seconds": 0.146472,
+          "user_seconds": 0.12205999999999999,
+          "system_seconds": 0.024412,
+          "wall_seconds": 0.14979660001699813,
+          "alert_count": 0,
+          "alert_flows": 0
+        },
+        {
+          "cpu_seconds": 0.11868799999999999,
+          "user_seconds": 0.09099399999999999,
+          "system_seconds": 0.027694,
+          "wall_seconds": 0.1422125990211498,
+          "alert_count": 0,
+          "alert_flows": 0
+        },
+        {
+          "cpu_seconds": 0.11925699999999999,
+          "user_seconds": 0.08848099999999999,
+          "system_seconds": 0.030775999999999998,
+          "wall_seconds": 0.12596089899307117,
+          "alert_count": 0,
+          "alert_flows": 0
+        }
+      ],
+      "bittorrent": [
+        {
+          "cpu_seconds": 0.11490399999999999,
+          "user_seconds": 0.07660299999999999,
+          "system_seconds": 0.038301,
+          "wall_seconds": 0.12097099999664351,
+          "alert_count": 0,
+          "alert_flows": 0
+        },
+        {
+          "cpu_seconds": 0.108377,
+          "user_seconds": 0.069671,
+          "system_seconds": 0.038706,
+          "wall_seconds": 0.12192900001537055,
+          "alert_count": 0,
+          "alert_flows": 0
+        },
+        {
+          "cpu_seconds": 0.105988,
+          "user_seconds": 0.070659,
+          "system_seconds": 0.035329,
+          "wall_seconds": 0.12079300000914373,
+          "alert_count": 0,
+          "alert_flows": 0
+        },
+        {
+          "cpu_seconds": 0.106125,
+          "user_seconds": 0.083384,
+          "system_seconds": 0.022740999999999997,
+          "wall_seconds": 0.12157180000212975,
+          "alert_count": 0,
+          "alert_flows": 0
+        }
+      ]
+    },
+    "median_cpu_seconds": {
+      "all": 0.11897249999999998,
+      "bittorrent": 0.107251
+    }
+  },
+  "versions": {
+    "suricata": "8.0.8",
+    "ndpi": "4.14"
+  },
+  "sources": {
+    "suricata": {
+      "url": "https://www.openinfosecfoundation.org/download/suricata-8.0.8.tar.gz",
+      "sha256": "bb56bbaeb4da81b4c90e61148f93b789ea924412207388bc9cba0a7ac6a24a8f"
+    },
+    "ndpi": {
+      "url": "https://codeload.github.com/ntop/nDPI/tar.gz/refs/tags/4.14",
+      "sha256": "954135ee14ad6bd74a78a10db560b534b8f2083ad0615f5c1a2c376fff0301e0"
+    }
+  },
+  "method": {
+    "runmode": "single",
+    "simulate_ips": true,
+    "timing": "wait4 child user + system CPU time, including startup/shutdown",
+    "samples_per_workload_and_mode": 4,
+    "order": "ABBAABBA",
+    "rule": "drop ip any any -> any any (msg:\"nDPI BitTorrent blocked\"; ndpi-protocol:BitTorrent; sid:9100001; rev:1;)",
+    "measures_nfqueue": false,
+    "memory_measurement": false
+  },
+  "performance_false_positive_evidence": [
+    {
+      "workload": "new_web_flows",
+      "app_proto": "http",
+      "transport": "TCP",
+      "client_source_port": 51413,
+      "service_port": 80,
+      "ndpi_confidence": {
+        "1": "Match by port"
+      }
+    },
+    {
+      "workload": "new_web_flows",
+      "app_proto": "tls",
+      "transport": "TCP",
+      "client_source_port": 53646,
+      "service_port": 443,
+      "ndpi_confidence": {
+        "1": "Match by port"
+      }
+    },
+    {
+      "workload": "udp_flows",
+      "app_proto": "ntp",
+      "transport": "UDP",
+      "client_source_port": 51413,
+      "service_port": 123,
+      "ndpi_confidence": {
+        "1": "Match by port"
+      }
+    }
+  ]
+}
