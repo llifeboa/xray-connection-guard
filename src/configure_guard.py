@@ -17,7 +17,14 @@ import guard
 from inspector import atomic_write
 
 
+MIN_TUN_XRAY_VERSION = (26, 11, 9)
+
+
 class DiscoveryError(RuntimeError):
+    pass
+
+
+class CoreVersionError(RuntimeError):
     pass
 
 
@@ -142,7 +149,7 @@ def access_paths(process):
     return found
 
 
-def discover_source(available, inventory, container=None):
+def mounted_containers(inventory):
     mounted = {}
     for item in inventory:
         name = item["name"].lstrip("/")
@@ -151,6 +158,63 @@ def discover_source(available, inventory, container=None):
         except OSError:
             continue
         mounted[namespace] = dict(item, name=name)
+    return mounted
+
+
+def discover_core(available, inventory, container=None):
+    mounted = mounted_containers(inventory)
+    candidates = []
+    for process in available:
+        node = mounted.get(process.mount_namespace)
+        if container and (node is None or node["name"] != container):
+            continue
+        if node and node["network"] != "host":
+            raise CoreVersionError(f"Xray container {node['name']} must use network_mode: host")
+        candidates.append(process)
+    if not candidates:
+        raise DiscoveryError("Running Xray core not found; start the selected RU node to check its version")
+    if len(candidates) != 1:
+        raise CoreVersionError("Several running Xray cores found. Select the RU node with --container NAME")
+    return candidates[0]
+
+
+def xray_version(process):
+    try:
+        result = subprocess.run([str(process.directory / "exe"), "version"],
+                                capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise CoreVersionError(f"Cannot read running Xray version (PID {process.pid}): {exc}") from exc
+    match = re.match(r"^Xray\s+(\d+)\.(\d+)\.(\d+)(?:\s|$)", result.stdout)
+    if result.returncode or not match:
+        raise CoreVersionError(f"Cannot determine running Xray version (PID {process.pid}); "
+                               "expected 'Xray MAJOR.MINOR.PATCH' from the running executable")
+    return tuple(map(int, match.groups()))
+
+
+def verify_core(process, require_tun):
+    version = xray_version(process)
+    detected = ".".join(map(str, version))
+    minimum = ".".join(map(str, MIN_TUN_XRAY_VERSION))
+    if version < MIN_TUN_XRAY_VERSION:
+        if require_tun:
+            raise CoreVersionError(f"Running Xray {detected} (PID {process.pid}) is too old for TUN. "
+                                   f"This guard requires Xray >= {minimum} for the tested TUN scheme. "
+                                   "Update the RU node's actual core, not only the host binary. "
+                                   "Use --inspection-mark only for a DIRECT/SO_MARK setup.")
+        print(f"[guard config] Running Xray {detected} (PID {process.pid}); "
+              f"DIRECT/SO_MARK only, TUN requires >= {minimum}")
+    else:
+        print(f"[guard config] Running Xray {detected} (PID {process.pid}); TUN version check passed")
+
+
+def check_core(path, container=None, require_tun=True):
+    config = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    process = discover_core(processes(), containers(), container or config.get("xray_container"))
+    verify_core(process, require_tun)
+
+
+def discover_source(available, inventory, container=None):
+    mounted = mounted_containers(inventory)
     candidates = {}
     for process in available:
         node = mounted.get(process.mount_namespace)
@@ -226,6 +290,7 @@ def configure(path, container=None, inspection_interface=None, inspection_mark=F
     if container:
         updated["xray_container"] = container
     guard.validate(updated)
+    verify_core(process, require_tun=guard.inspection_interface(updated) is not None)
     if data is not None:
         target = path.parent / "xray-timezone.tzif"
         timezone_changed = not target.is_file() or target.read_bytes() != data
@@ -253,17 +318,22 @@ def main():
     inspection.add_argument("--inspection-mark", action="store_true",
                             help="Switch back to the default SO_MARK inspection")
     parser.add_argument("--defer", action="store_true", help="Allow detection to wait until enable")
+    parser.add_argument("--check-core", action="store_true",
+                        help="Check the running RU core before installation; TUN is required unless --inspection-mark")
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error("Run as root")
     try:
-        configure(args.config, args.container, args.inspection_interface, args.inspection_mark)
+        if args.check_core:
+            check_core(args.config, args.container, require_tun=not args.inspection_mark)
+        else:
+            configure(args.config, args.container, args.inspection_interface, args.inspection_mark)
     except DiscoveryError as exc:
         if args.defer:
             print(f"[guard config] Detection deferred until enable: {exc}")
         else:
             parser.exit(1, f"[guard config] {exc}\n")
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+    except (CoreVersionError, OSError, ValueError, subprocess.SubprocessError) as exc:
         parser.exit(1, f"[guard config] {exc}\n")
 
 

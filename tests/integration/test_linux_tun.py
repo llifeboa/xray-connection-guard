@@ -330,6 +330,12 @@ def exercise(args, root):
     private_key, public_key = key_pair(binary)
     clients = {name: str(uuid.uuid4()) for name in CLIENT_IPS}
     relay_id = str(uuid.uuid4())
+    relay_user = {"id": relay_id, "email": "relay@test"}
+    if args.exit_flow:
+        relay_user["flow"] = args.exit_flow
+    relay_outbound = outbound("TO_FREEDOM", EXIT_IP, 2443, relay_id, public_key, args.exit_network)
+    if args.exit_flow:
+        relay_outbound["settings"]["vnext"][0]["users"][0]["flow"] = args.exit_flow
     freedom_settings = {"finalRules": [{"action": "allow", "ip": PEERS + [
         CONTROL_PEER, SECOND_CONTROL_PEER]}]}
     run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
@@ -337,9 +343,9 @@ def exercise(args, root):
     save_config(root, "exit", {
         "log": {"access": str(root / "exit-access.log"), "loglevel": "info"},
         "inbounds": [{"tag": "EXIT", "listen": EXIT_IP, "port": 2443, "protocol": "vless",
-                      "settings": {"clients": [{"id": relay_id, "email": "relay@test"}],
+                      "settings": {"clients": [relay_user],
                                    "decryption": "none"},
-                      "streamSettings": reality(private_key=private_key, network="xhttp")}],
+                      "streamSettings": reality(private_key=private_key, network=args.exit_network)}],
         "outbounds": [{"tag": "DIRECT", "protocol": "freedom", "settings": freedom_settings}]})
     with contextlib.ExitStack() as cleanup:
         worker = launch(cleanup, ["unshare", "--net", sys.executable, "-B", str(Path(__file__).resolve()),
@@ -371,7 +377,7 @@ def exercise(args, root):
         watcher_code = ("import sys; from pathlib import Path; import inspector; "
                         "paths = inspector.Paths(Path(sys.argv[1])); ")
         if not args.transport_only:
-            watcher_code += "inspector.update_queue(paths=paths, check_device=False); "
+            watcher_code += "inspector.sync_queue(paths, check_device=False); "
         watcher_code += "inspector.watch_network(paths)"
         watcher = launch(cleanup, [sys.executable, "-u", "-B", "-c", watcher_code, str(root)], root, "network")
         physical_default = run(["ip", "-4", "-j", "route", "show", "default"]).stdout
@@ -386,8 +392,7 @@ def exercise(args, root):
         config = {"log": {"access": str(access), "loglevel": "info"},
                   "dns": {"hosts": {"peer.test": CONTROL_PEER}},
                   "inbounds": [public, *fragment["inbounds"]],
-                  "outbounds": [*fragment["outbounds"], outbound(
-                      "TO_FREEDOM", EXIT_IP, 2443, relay_id, public_key, "xhttp")],
+                  "outbounds": [*fragment["outbounds"], relay_outbound],
                   "routing": fragment["routing"]}
         path = save_config(root, "ru", config)
         relay = launch(cleanup, [binary, "run", "-c", str(path)], root, "ru-xray")
@@ -431,7 +436,7 @@ def exercise(args, root):
         previous_index = json.loads(run(["ip", "-j", "link", "show", "dev", INTERFACE]).stdout)[0]["ifindex"]
         stop(relay)
         wait_for(lambda: not interface_ready(), "old TUN removed")
-        launch(cleanup, [binary, "run", "-c", str(root / "ru.json")], root, "ru-xray-restarted")
+        relay = launch(cleanup, [binary, "run", "-c", str(root / "ru.json")], root, "ru-xray-restarted")
         wait_for(lambda: network.ready(INTERFACE), "automatic routing after Xray restart")
         current_index = json.loads(run(["ip", "-j", "link", "show", "dev", INTERFACE]).stdout)[0]["ifindex"]
         assert previous_index != current_index
@@ -455,7 +460,8 @@ def exercise(args, root):
             control_udp = cleanup.enter_context(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
             control_udp.settimeout(3)
             check_udp_echo(control_udp, control_endpoint, SECOND_CONTROL_PEER)
-            print("PASS: native TUN, interface-bound freedom, REALITY/XHTTP, TCP/UDP IPv4", flush=True)
+            print(f"PASS: native TUN, interface-bound freedom, REALITY/{args.exit_network}, "
+                  f"flow={args.exit_flow or 'none'}, TCP/UDP IPv4", flush=True)
             if args.transport_only:
                 check_tun_failure(sockets["control"], worker)
                 return
@@ -533,15 +539,65 @@ def exercise(args, root):
             state = json.loads(run(["nft", "-j", "list", "set", "inet", guard.TABLE, "clients_v4"]).stdout)
             stop(suricata)
             check_tcp_blocked(sockets["control"])
-            launch(cleanup, suricata_arguments, root, "suricata-restarted")
+            suricata = launch(cleanup, suricata_arguments, root, "suricata-restarted")
             inspector.wait_ready()
             check_tcp_echo(sockets["control"], b"queue-restored")
             print("PASS: missing NFQUEUE listener fails closed; Suricata restart restores traffic", flush=True)
+            routing_before_disable = network.state.read_bytes()
+            physical_before_disable = run(["ip", "-4", "-j", "route", "show", "default"]).stdout
+            inspector.set_inspection(paths, enabled=False)
+            stop(suricata)
+            run(["nft", "delete", "table", "inet", guard.TABLE])
+            inspector.set_inspection(paths, enabled=False)
+            assert network.state.read_bytes() == routing_before_disable
+            assert network.ready(INTERFACE)
+            disabled_eve = eve.read_bytes()
+            check_tcp_echo(sockets["tcp"], handshake)
+            bypass_association, bypass_endpoint = socks_request(sockets["udp"], 3, "0.0.0.0", 0)
+            cleanup.callback(bypass_association.close)
+            bypass_udp = cleanup.enter_context(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
+            bypass_udp.settimeout(3)
+            for peer in PEERS:
+                udp_send(bypass_udp, bypass_endpoint, peer, dht)
+                assert bypass_udp.recv(65535) == bytes(3) + encoded_address(peer, PEER_PORT) + dht
+            stop(watcher)
+            watcher = launch(cleanup, [sys.executable, "-u", "-B", "-c", watcher_code, str(root)],
+                             root, "network-routing-only")
+            wait_for(lambda: network.ready(INTERFACE), "routing-only watcher restart")
+            stop(relay)
+            wait_for(lambda: not interface_ready(), "routing-only old TUN removed")
+            relay = launch(cleanup, [binary, "run", "-c", str(root / "ru.json")], root, "ru-xray-routing-only")
+            wait_for(lambda: network.ready(INTERFACE), "routing-only recovery after Xray restart")
+            check_tcp_echo(sockets["control"], handshake)
+            check_udp_echo(control_udp, control_endpoint, SECOND_CONTROL_PEER)
+            assert run(["ip", "-4", "-j", "route", "show", "default"]).stdout == physical_before_disable
+            assert subprocess.run(["nft", "list", "table", "inet", inspector.TABLE],
+                                  capture_output=True).returncode != 0
+            assert eve.read_bytes() == disabled_eve
+            print("PASS: routing-only passes TCP BitTorrent and UDP DHT without DPI or bans; "
+                  "routes survive disable and recover after watcher/Xray restart", flush=True)
+            inspector.set_inspection(paths, enabled=True)
+            launch(cleanup, suricata_arguments, root, "suricata-reenabled")
+            inspector.wait_ready()
+            check_tcp_echo(sockets["control"], b"inspection-reenabled")
+            try:
+                with tcp_connect(sockets["control"], PEERS[0]) as stream:
+                    stream.settimeout(0.5)
+                    stream.sendall(handshake)
+                    assert not stream.recv(65535), "BitTorrent passed after inspection was reenabled"
+            except (OSError, EOFError):
+                pass
+            print("PASS: reenable restores nDPI blocking without changing the Xray profile", flush=True)
             check_tun_failure(sockets["control"], worker)
             (root / "result.json").write_text(json.dumps({"stats": dict(correlator.stats),
+                "exit_transport": args.exit_network, "exit_flow": args.exit_flow,
                 "bans": records, "nft_bans": state, "queue_packets": counts,
                 "fail_closed": ["nfqueue-listener-down", "tun-down", "exit-down"],
                 "automatic_ipv4": {"tun_recreated": True, "physical_default_preserved": True},
+                "routing_only": {"routes_preserved": True, "bans_cleared": True,
+                                 "tcp_bittorrent_passes": True, "udp_dht_passes": True,
+                                 "queue_watcher_restart": True, "tun_recreated": True,
+                                 "no_new_eve_events": True, "inspection_reenabled": True},
                 "xray": run([binary, "version"]).stdout}, indent=2))
 
 
@@ -549,6 +605,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xray", default="/usr/local/bin/xray")
     parser.add_argument("--external-xray", help="Use another Xray binary for clients/exit to test mixed versions")
+    parser.add_argument("--exit-network", choices=("raw", "xhttp"), default="xhttp")
+    parser.add_argument("--exit-flow", choices=("", "xtls-rprx-vision"), default="")
     parser.add_argument("--binary", help="Suricata 8+ binary with nDPI and NFQUEUE")
     parser.add_argument("--suricata-config", type=Path)
     parser.add_argument("--transport-only", action="store_true")
@@ -556,6 +614,8 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--trace", action="store_true", help="Record test TUN packets in the output directory")
     args = parser.parse_args()
+    if args.exit_flow and args.exit_network != "raw":
+        parser.error("Vision requires --exit-network raw")
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     if os.readlink("/proc/self/ns/net") == os.readlink("/proc/1/ns/net"):
         parser.error("Run as root with unshare --net; host firewall access is forbidden")

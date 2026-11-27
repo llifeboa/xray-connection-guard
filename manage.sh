@@ -30,6 +30,7 @@ start_inspector() {
   systemctl daemon-reload
   stop_old
   systemctl enable "$INSPECTOR_UNIT"
+  python3 "$INSPECTOR" inspection-on
   systemctl restart "$QUEUE_UNIT"
   systemctl restart "$INSPECTOR_UNIT"
   systemctl is-active --quiet "$INSPECTOR_UNIT" || { journalctl -u "$INSPECTOR_UNIT" -n 50 --no-pager; exit 1; }
@@ -54,9 +55,17 @@ stop_old() {
     echo '[guard] Previous panel-API guard stopped/disabled'
   fi
 }
+clear_bans() {
+  local tables
+  tables="$(nft list tables)"
+  if grep -Fxq 'table inet xray_client_ban' <<< "$tables"; then
+    nft delete table inet xray_client_ban
+  fi
+}
 case "$OP" in
   install)
     install_tools
+    python3 "$ROOT/src/configure_guard.py" --config "$CFG" --check-core --defer "${@:2}"
     install -d -m 755 /opt/xray-connection-guard
     install -d -m 700 /etc/xray-connection-guard
     install -d -m 700 /var/log/xray-connection-guard
@@ -149,11 +158,26 @@ PY
     echo '[guard] ENFORCE ON: 10-minute IP bans on all ports and protocols; TCP sockets force-closed; node IPs refreshed every 10 minutes.'
     ;;
   off)
-    systemctl disable --now "$UNIT" 2>/dev/null || true
-    if nft list table inet xray_client_ban >/dev/null 2>&1; then
-      nft delete table inet xray_client_ban
+    if ! systemctl disable --now "$UNIT"; then
+      echo '[guard] Failed to stop/disable guard; bans were not cleared.' >&2
+      exit 1
     fi
-    echo '[guard] Off, its own bans cleared; Suricata and Xray unchanged.'
+    clear_bans
+    echo '[guard] IP bans off and cleared; Suricata and Xray unchanged. Use disable to also stop analysis while keeping routing.'
+    ;;
+  disable)
+    [[ -f "$INSPECTOR" ]] || { echo '[guard] Inspector missing; run: sudo bash manage.sh install'; exit 1; }
+    systemctl disable --now "$UNIT"
+    python3 "$INSPECTOR" inspection-off
+    systemctl disable --now "$INSPECTOR_UNIT"
+    systemctl enable --now "$QUEUE_UNIT"
+    clear_bans
+    echo '[guard] Disabled: IP bans and analysis off; packets pass without inspection. TUN routing stays maintained; Xray profile unchanged.'
+    ;;
+  uninstall)
+    echo '[guard] Removing guard and its routing. Restore the original RU Xray profile first; the TUN inspection path will stop working.'
+    python3 "$ROOT/src/inspector.py" uninstall
+    echo '[guard] Uninstalled: services, IP bans, NFQUEUE and owned TUN routing removed. Xray unchanged. Configuration, logs, backups and Suricata/nDPI engines preserved.'
     ;;
   status)
     systemctl status "$UNIT" --no-pager -l || true
@@ -165,7 +189,9 @@ PY
     tail -n 15 /var/log/xray-connection-guard/audit.jsonl 2>/dev/null || true
     ;;
   *)
-    echo 'Usage: sudo bash manage.sh install|monitor|enable|off|status|bans'
+    echo 'Usage: sudo bash manage.sh install|monitor|enable|off|disable|uninstall|status|bans'
+    echo 'off: stop IP bans only; disable: stop bans and analysis, keep TUN routing and traffic'
+    echo 'uninstall: remove guard services, program files and owned routing; preserve config, logs and engines'
     echo 'Options: --container NAME; --inspection-interface NAME or --inspection-mark'
     exit 2
     ;;

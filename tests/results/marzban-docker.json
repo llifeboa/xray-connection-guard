@@ -1,5 +1,12 @@
 {
   "tested_on": "2026-11-26",
+  "scope": {
+    "historical_command_semantics": "This report predates routing-only disable. In the current CLI disable preserves TUN routes and forwards packets without DPI; full route cleanup is a separate explicit rollback. The full Marzban suite has not been rerun for these new semantics.",
+    "topology": "Client, RU Marzban and exit run on the same workstation in isolated Linux network namespaces",
+    "public_external_exit_tested": false,
+    "supplied_external_vless_key_used": false,
+    "limitation": "The successful checks below validate the local isolated topology, not forwarding or blocking through a public external VLESS node."
+  },
   "status": "passed_with_documented_negative_scenarios",
   "environment": {
     "outer_docker": "Docker Desktop 4.25.1 / Engine 24.0.6, Windows + WSL2",

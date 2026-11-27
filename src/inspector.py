@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Configure the installed Suricata/nDPI and the guard's dedicated NFQUEUE table."""
 import argparse
+import contextlib
 import copy
+import errno
 import json
 import os
 import re
@@ -33,6 +35,7 @@ class Paths:
         self.yaml = self.config / "suricata.yaml"
         self.rules = self.config / "bittorrent.rules"
         self.state = self.config / "inspection.json"
+        self.bypass = self.config / "routing-only"
         self.units = root / "etc/systemd/system"
         self.helper = root / "opt/xray-connection-guard/inspector.py"
         self.log = root / "var/log/xray-ndpi"
@@ -342,6 +345,11 @@ def update_queue(remove=False, paths=None, check_device=True):
     if not remove and check_device:
         check_interface(interface)
     result = run(["nft", "list", "table", "inet", TABLE], check=False)
+    if result.returncode:
+        tables = json.loads(run(["nft", "-j", "list", "tables"]).stdout)
+        if any(entry.get("table", {}).get("family") == "inet" and
+               entry["table"].get("name") == TABLE for entry in tables.get("nftables", [])):
+            raise RuntimeError(f"Cannot read nftables table {TABLE}: {result.stderr.strip()}")
     prefix = ""
     if result.returncode == 0:
         # nft 1.0.2 preserves table comments but omits them from JSON output.
@@ -356,6 +364,29 @@ def update_queue(remove=False, paths=None, check_device=True):
     batch = prefix + queue_rules(interface)
     run(["nft", "-c", "-f", "-"], data=batch)
     run(["nft", "-f", "-"], data=batch)
+
+
+@contextlib.contextmanager
+def inspection_lock(paths):
+    import fcntl
+    paths.config.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (paths.config / "inspection.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def sync_queue(paths, check_device=True):
+    with inspection_lock(paths):
+        update_queue(remove=paths.bypass.exists(), paths=paths, check_device=check_device)
+
+
+def set_inspection(paths, enabled):
+    with inspection_lock(paths):
+        if enabled:
+            paths.bypass.unlink(missing_ok=True)
+        else:
+            atomic_write(paths.bypass, "routing-only\n", 0o600)
+        update_queue(remove=not enabled, paths=paths, check_device=False)
 
 
 def watch_network(paths):
@@ -375,6 +406,8 @@ def watch_network(paths):
 
 
 def wait_network(paths):
+    if paths.bypass.exists():
+        return
     interface = selected_interface(paths)
     if not interface:
         raise RuntimeError("No inspection interface configured")
@@ -397,10 +430,56 @@ def stop_queue(paths):
     update_queue(remove=True, paths=paths)
 
 
+def stop_installed_unit(unit):
+    result = run(["systemctl", "show", unit, "-p", "LoadState", "--value"], check=False)
+    state = result.stdout.strip()
+    if state == "not-found" and result.returncode in (0, 4):
+        return
+    if result.returncode or not state:
+        raise RuntimeError(f"Cannot query {unit}: {result.stderr.strip() or state or 'empty LoadState'}")
+    run(["systemctl", "disable", "--now", unit])
+
+
+def uninstall(paths):
+    units = ["xray-connection-guard.service", QUEUE_UNIT]
+    inspector_unit = paths.units / "xray-ndpi.service"
+    if inspector_unit.exists():
+        if str(paths.helper) not in inspector_unit.read_text(encoding="utf-8"):
+            raise RuntimeError(f"Refusing to remove unowned service: {inspector_unit}")
+        units.insert(1, inspector_unit.name)
+    for unit in units:
+        stop_installed_unit(unit)
+    tun_network.Network(paths.network).clear()
+    update_queue(remove=True, paths=paths)
+    tables = json.loads(run(["nft", "-j", "list", "tables"]).stdout)
+    if any(entry.get("table", {}).get("family") == "inet" and
+           entry["table"].get("name") == "xray_client_ban" for entry in tables.get("nftables", [])):
+        run(["nft", "delete", "table", "inet", "xray_client_ban"])
+    mode = paths.units / "xray-connection-guard.service.d/mode.conf"
+    files = [paths.units / unit for unit in units]
+    files.extend(paths.helper.parent / name for name in (
+        "guard.py", "log_maintenance.py", "inspector.py", "tun_network.py",
+        "install_suricata.py", "configure_guard.py", "install-suricata.lock"))
+    files.extend((mode, paths.bypass, paths.config / "inspection.lock",
+                  paths.network.with_suffix(".lock")))
+    for path in files:
+        path.unlink(missing_ok=True)
+    for directory in (mode.parent, paths.network.parent, paths.helper.parent):
+        try:
+            directory.rmdir()
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            if exc.errno not in (errno.ENOTEMPTY, errno.EEXIST):
+                raise
+    run(["systemctl", "daemon-reload"])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("install", "check", "ready", "queue", "queue-off",
-                                          "queue-watch", "network-ready"))
+                                          "queue-watch", "network-ready", "inspection-on", "inspection-off",
+                                          "uninstall"))
     parser.add_argument("--config", default="/etc/xray-connection-guard/config.json")
     args = parser.parse_args()
     if os.geteuid() != 0:
@@ -414,14 +493,18 @@ def main():
         elif args.action == "ready":
             wait_ready()
         elif args.action == "queue-watch":
-            update_queue(paths=paths, check_device=False)
+            sync_queue(paths, check_device=False)
             watch_network(paths)
         elif args.action == "network-ready":
             wait_network(paths)
         elif args.action == "queue-off":
             stop_queue(paths)
+        elif args.action == "uninstall":
+            uninstall(paths)
+        elif args.action in ("inspection-on", "inspection-off"):
+            set_inspection(paths, enabled=args.action == "inspection-on")
         else:
-            update_queue(paths=paths)
+            sync_queue(paths)
             interface = selected_interface(paths)
             if interface:
                 tun_network.Network(paths.network).ensure(interface)

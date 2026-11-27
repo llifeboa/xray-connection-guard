@@ -1,0 +1,263 @@
+{
+  "tested_on": "2026-11-27",
+  "status": "passed",
+  "additional_raw_reality_without_flow": {
+    "status": "passed",
+    "exit_transport": "raw",
+    "exit_flow": "",
+    "routing_only": {
+      "routes_preserved": true,
+      "bans_cleared": true,
+      "tcp_bittorrent_passes": true,
+      "udp_dht_passes": true,
+      "queue_watcher_restart": true,
+      "tun_recreated": true,
+      "no_new_eve_events": true,
+      "inspection_reenabled": true
+    }
+  },
+  "scope": {
+    "topology": "Local Xray RU and exit in separate isolated network namespaces; not the supplied public VLESS node",
+    "live_test": "Production inspector helpers, real Xray 26.11.9, Suricata 8.0.8/nDPI 4.14 and nftables; no systemd in the live TUN test",
+    "cli_test": "manage.sh install/enable/off/disable tested separately with real nftables and simulated systemd/Suricata",
+    "profile_changed_to_disable": false
+  },
+  "stats": {
+    "access_lines": 132,
+    "access": 10,
+    "access_ignored": 118,
+    "eve_lines": 37,
+    "alerts": 37,
+    "matched": 10,
+    "matched_by_udp_socket": 5,
+    "udp_socket_logs": 2,
+    "udp_socket_bindings": 2,
+    "correlation_waits": 0,
+    "unmatched_expired": 0,
+    "bans": 2,
+    "ban_errors": 0
+  },
+  "exit_transport": "xhttp",
+  "exit_flow": "",
+  "bans": [
+    {
+      "ban_scope": "all-ports-and-protocols",
+      "ban_seconds": 600,
+      "client_ip": "203.0.113.20",
+      "email": "tcp@test",
+      "emails": [
+        "tcp@test"
+      ],
+      "evidence": [
+        {
+          "correlation": "peer",
+          "flow_id": "1550047032986761",
+          "local": [
+            "198.18.0.1",
+            44762
+          ],
+          "peer_ip": "198.51.100.10",
+          "peer_port": 6881,
+          "proto": "TCP"
+        },
+        {
+          "correlation": "peer",
+          "flow_id": "1425117885900288",
+          "local": [
+            "198.18.0.1",
+            60404
+          ],
+          "peer_ip": "198.51.100.11",
+          "peer_port": 6881,
+          "proto": "TCP"
+        },
+        {
+          "correlation": "peer",
+          "flow_id": "1580968524972508",
+          "local": [
+            "198.18.0.1",
+            44864
+          ],
+          "peer_ip": "198.51.100.12",
+          "peer_port": 6881,
+          "proto": "TCP"
+        },
+        {
+          "correlation": "peer",
+          "flow_id": "1452763911501253",
+          "local": [
+            "198.18.0.1",
+            37604
+          ],
+          "peer_ip": "198.51.100.13",
+          "peer_port": 6881,
+          "proto": "TCP"
+        },
+        {
+          "correlation": "peer",
+          "flow_id": "1607510350755983",
+          "local": [
+            "198.18.0.1",
+            42038
+          ],
+          "peer_ip": "198.51.100.14",
+          "peer_port": 6881,
+          "proto": "TCP"
+        }
+      ],
+      "mode": "enforce",
+      "result": "banned-600s",
+      "tcp_socket_actions": [
+        {
+          "ok": true,
+          "output": "Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n0      0          192.0.2.1:1443 203.0.113.20:59851       \n0      0          192.0.2.1:1443 203.0.113.20:51513       \n0      0          192.0.2.1:1443 203.0.113.20:47699       \n0      0          192.0.2.1:1443 203.0.113.20:43281       \n0      0          192.0.2.1:1443 203.0.113.20:37951",
+          "scope": "all"
+        }
+      ],
+      "time": "2026-11-27T05:28:29.901807+00:00",
+      "unique_flows": 5,
+      "unique_peers": 5
+    },
+    {
+      "ban_scope": "all-ports-and-protocols",
+      "ban_seconds": 600,
+      "client_ip": "203.0.113.21",
+      "email": "udp@test",
+      "emails": [
+        "udp@test"
+      ],
+      "evidence": [
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1436133484047104",
+          "local": [
+            "198.18.0.1",
+            35088
+          ],
+          "peer_ip": "198.51.100.10",
+          "peer_port": 6881,
+          "proto": "UDP"
+        },
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1826874319934368",
+          "local": [
+            "198.18.0.1",
+            35088
+          ],
+          "peer_ip": "198.51.100.11",
+          "peer_port": 6881,
+          "proto": "UDP"
+        },
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1719716892517097",
+          "local": [
+            "198.18.0.1",
+            35088
+          ],
+          "peer_ip": "198.51.100.12",
+          "peer_port": 6881,
+          "proto": "UDP"
+        },
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1895164194122540",
+          "local": [
+            "198.18.0.1",
+            35088
+          ],
+          "peer_ip": "198.51.100.13",
+          "peer_port": 6881,
+          "proto": "UDP"
+        },
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1996960654431266",
+          "local": [
+            "198.18.0.1",
+            35088
+          ],
+          "peer_ip": "198.51.100.14",
+          "peer_port": 6881,
+          "proto": "UDP"
+        }
+      ],
+      "mode": "enforce",
+      "result": "banned-600s",
+      "tcp_socket_actions": [
+        {
+          "ok": true,
+          "output": "Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n0      0          192.0.2.1:1443 203.0.113.21:57937",
+          "scope": "all"
+        }
+      ],
+      "time": "2026-11-27T05:28:31.439381+00:00",
+      "unique_flows": 5,
+      "unique_peers": 5
+    }
+  ],
+  "nft_bans": {
+    "nftables": [
+      {
+        "metainfo": {
+          "version": "1.0.2",
+          "release_name": "Lester Gooch",
+          "json_schema_version": 1
+        }
+      },
+      {
+        "set": {
+          "family": "inet",
+          "name": "clients_v4",
+          "table": "xray_client_ban",
+          "type": "ipv4_addr",
+          "handle": 3,
+          "size": 4096,
+          "flags": [
+            "timeout"
+          ],
+          "timeout": 600,
+          "elem": [
+            {
+              "elem": {
+                "val": "203.0.113.20",
+                "expires": 598
+              }
+            },
+            {
+              "elem": {
+                "val": "203.0.113.21",
+                "expires": 599
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "queue_packets": {
+    "output": 77,
+    "input": 37
+  },
+  "fail_closed": [
+    "nfqueue-listener-down",
+    "tun-down",
+    "exit-down"
+  ],
+  "automatic_ipv4": {
+    "tun_recreated": true,
+    "physical_default_preserved": true
+  },
+  "routing_only": {
+    "routes_preserved": true,
+    "bans_cleared": true,
+    "tcp_bittorrent_passes": true,
+    "udp_dht_passes": true,
+    "queue_watcher_restart": true,
+    "tun_recreated": true,
+    "no_new_eve_events": true,
+    "inspection_reenabled": true
+  },
+  "xray": "Xray 26.11.9 (Xray, Penetrates Everything.) 676eaf6 (go1.27.3 linux/amd64)\nA unified platform for anti-censorship.\n"
+}

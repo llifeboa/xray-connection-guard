@@ -1,0 +1,174 @@
+{
+  "tested_on": "2026-11-26",
+  "local_raw_vision": {
+    "status": "passed",
+    "environment": "Ubuntu in WSL2; RU and exit in separate private Linux network namespaces",
+    "xray": "Xray 26.11.9 (Xray, Penetrates Everything.) 676eaf6 (go1.27.3 linux/amd64)\nA unified platform for anti-censorship.",
+    "suricata": "8.0.8 with the nDPI plugin",
+    "path": [
+      "VLESS test client",
+      "RU INSPECT_VIA_TUN (freedom bound to xray-guard)",
+      "NFQUEUE / Suricata",
+      "GUARD_TUN_IN",
+      "TO_FREEDOM (VLESS/RAW/REALITY, xtls-rprx-vision)",
+      "isolated exit freedom",
+      "controlled TCP/UDP echo peers"
+    ],
+    "exit_transport": "raw",
+    "exit_flow": "xtls-rprx-vision",
+    "guard_execution": "Production Correlator and Firewall called by the test; real nftables, not a systemd service",
+    "reserved_client_addresses_allowed_only_inside_test": true,
+    "checks": [
+      "Ordinary TCP, UDP peer changes and DNS destinations pass through the encrypted RAW/Vision exit",
+      "TCP BitTorrent handshakes are classified and dropped before reaching the echo peers",
+      "DHT is classified and dropped after recognition; initial unclassified packets may pass",
+      "Five flows to five distinct peer IPs ban the original TCP and UDP client IPs for 600 seconds",
+      "Five UDP peers use one local socket and are attributed to the original UDP client",
+      "The unbanned control client's established TCP connection remains usable",
+      "TUN recreation restores selective routing and preserves the physical default route"
+    ],
+    "stats": {
+      "access_lines": 137,
+      "access": 10,
+      "access_ignored": 123,
+      "eve_lines": 37,
+      "alerts": 37,
+      "matched": 10,
+      "matched_by_udp_socket": 5,
+      "udp_socket_logs": 2,
+      "udp_socket_bindings": 2,
+      "correlation_waits": 0,
+      "unmatched_expired": 0,
+      "bans": 2,
+      "ban_errors": 0
+    },
+    "bans": [
+      {
+        "client_ip": "203.0.113.20",
+        "protocols": [
+          "TCP"
+        ],
+        "unique_flows": 5,
+        "unique_peers": 5,
+        "result": "banned-600s",
+        "ban_seconds": 600
+      },
+      {
+        "client_ip": "203.0.113.21",
+        "protocols": [
+          "UDP"
+        ],
+        "unique_flows": 5,
+        "unique_peers": 5,
+        "result": "banned-600s",
+        "ban_seconds": 600
+      }
+    ],
+    "nft_bans": {
+      "nftables": [
+        {
+          "metainfo": {
+            "version": "1.0.2",
+            "release_name": "Lester Gooch",
+            "json_schema_version": 1
+          }
+        },
+        {
+          "set": {
+            "family": "inet",
+            "name": "clients_v4",
+            "table": "xray_client_ban",
+            "type": "ipv4_addr",
+            "handle": 3,
+            "size": 4096,
+            "flags": [
+              "timeout"
+            ],
+            "timeout": 600,
+            "elem": [
+              {
+                "elem": {
+                  "val": "203.0.113.20",
+                  "expires": 598
+                }
+              },
+              {
+                "elem": {
+                  "val": "203.0.113.21",
+                  "expires": 599
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "queue_packets": {
+      "output": 77,
+      "input": 37
+    },
+    "fail_closed": [
+      "nfqueue-listener-down",
+      "tun-down",
+      "exit-down"
+    ],
+    "automatic_ipv4": {
+      "tun_recreated": true,
+      "physical_default_preserved": true
+    }
+  },
+  "original_supplied_external_link": {
+    "status": "failed_connectivity_for_original_link",
+    "superseded_by": "external-vless.json",
+    "protocol": "VLESS/RAW/REALITY",
+    "flow": "xtls-rprx-vision",
+    "client_versions": [
+      "26.3.27",
+      "26.11.9"
+    ],
+    "environments": [
+      "Ubuntu in WSL2",
+      "temporary Docker container on the default bridge"
+    ],
+    "credentials_in_report": false,
+    "node_configuration_modified": false,
+    "inspection_enabled_for_connectivity_probes": false,
+    "freedom_control": [
+      {
+        "host": "api.ipify.org",
+        "http_status": 200,
+        "passed": true
+      },
+      {
+        "host": "www.cloudflare.com",
+        "http_status": 200,
+        "passed": true
+      },
+      {
+        "host": "example.com",
+        "http_status": 200,
+        "passed": true
+      }
+    ],
+    "external_vless_probes": [
+      {
+        "host": "api.ipify.org",
+        "protocol": "HTTPS",
+        "result": "TLS connection closed with SSLEOFError before HTTP response"
+      },
+      {
+        "host": "www.cloudflare.com",
+        "protocol": "HTTPS",
+        "result": "TLS connection closed with SSLEOFError before HTTP response"
+      },
+      {
+        "host": "example.com",
+        "protocol": "HTTP",
+        "result": "Connection closed without HTTP response"
+      }
+    ],
+    "host_freedom_egress_matches_supplied_node_address": true,
+    "limitation": "These external probes use the same physical computer's existing network path; no independent external source or server-side logs were available.",
+    "conclusion": "HTTP/HTTPS forwarding failed for the original link with xtls-rprx-vision before guard or Suricata was enabled. The user subsequently supplied a corrected link without flow; real external inspection and bans passed with that link, as recorded separately in external-vless.json."
+  }
+}

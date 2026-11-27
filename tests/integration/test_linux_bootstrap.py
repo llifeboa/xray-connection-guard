@@ -60,7 +60,7 @@ def main():
         env.update(PATH=str(commands) + ":" + env["PATH"], PYTHONDONTWRITEBYTECODE="1")
         for key in ("SURICATA_BIN", "SURICATA_CONFIG", "NDPI_PLUGIN"):
             env.pop(key, None)
-        run(["bash", str(root / "manage.sh"), "install"], env=env)
+        run(["bash", str(root / "manage.sh"), "install", "--inspection-mark"], env=env)
         paths = inspector.Paths()
         state = json.loads(paths.state.read_text())
         binary = state["binary"]
@@ -81,7 +81,7 @@ def main():
         forbidden = commands / "apt-get"
         forbidden.write_text("#!/bin/sh\necho 'Repeated install must reuse the engine' >&2\nexit 99\n")
         forbidden.chmod(0o755)
-        run(["bash", str(root / "manage.sh"), "install"], env=env)
+        run(["bash", str(root / "manage.sh"), "install", "--inspection-mark"], env=env)
         assert paths.state.read_bytes() == original_state
         assert sorted(Path(binary).parents[2].iterdir()) == engines
         assert (logs / "install-suricata.log").read_bytes() == original_log

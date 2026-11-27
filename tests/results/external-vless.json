@@ -1,0 +1,333 @@
+{
+  "tested_on": "2026-11-27",
+  "timezone": "Europe/Moscow",
+  "environment": "Ubuntu 24.04 disposable Docker container, own bridge network, Docker Desktop/WSL2",
+  "scope": {
+    "public_external_exit_tested": true,
+    "supplied_external_vless_key_used": true,
+    "corrected_link_flow": "absent; no implicit Vision",
+    "node_configuration_modified": false,
+    "guard_service_daemon_tested": false,
+    "path": [
+      "local VLESS/RAW/REALITY test clients",
+      "RU INSPECT_VIA_TUN (freedom bound to xray-guard)",
+      "native TUN / NFQUEUE / real Suricata and nDPI",
+      "GUARD_TUN_IN",
+      "TO_FREEDOM (supplied external VLESS/RAW/REALITY, no flow)",
+      "94.183.152.97:443",
+      "public HTTPS / UDP DNS / public BitTorrent bootstrap destinations"
+    ]
+  },
+  "engine": {
+    "xray": "26.11.9",
+    "suricata": "8.0.8",
+    "ndpi": "4.14",
+    "protocol_detection_mask": "all protocols; production plugin unchanged"
+  },
+  "status": "passed",
+  "external_endpoint": {
+    "address": "94.183.152.97",
+    "port": 443
+  },
+  "transport": "raw",
+  "security": "reality",
+  "flow": "",
+  "credentials_in_report": false,
+  "exit_ip": {
+    "before_dpi": "94.183.152.97",
+    "with_dpi": "94.183.152.97",
+    "after_bans": "94.183.152.97",
+    "after_suricata_restart": "94.183.152.97",
+    "after_endpoint_unblocked": "94.183.152.97"
+  },
+  "udp_dns_before_and_after_dpi": true,
+  "tcp_peer_ips": [
+    "1.0.0.1",
+    "8.8.8.8",
+    "8.8.4.4",
+    "9.9.9.9",
+    "149.112.112.112"
+  ],
+  "dht_peer_endpoints": [
+    [
+      "67.215.246.10",
+      6881
+    ],
+    [
+      "212.129.33.59",
+      6881
+    ],
+    [
+      "87.98.162.88",
+      6881
+    ],
+    [
+      "147.78.3.239",
+      6881
+    ],
+    [
+      "185.126.239.132",
+      6881
+    ],
+    [
+      "168.222.245.126",
+      6881
+    ]
+  ],
+  "dht_packets_per_peer": 5,
+  "dht_single_local_endpoint": [
+    [
+      "198.18.0.1",
+      41470
+    ]
+  ],
+  "bans": [
+    {
+      "ban_scope": "all-ports-and-protocols",
+      "ban_seconds": 600,
+      "client_ip": "203.0.113.20",
+      "email": "tcp@test",
+      "emails": [
+        "tcp@test"
+      ],
+      "evidence": [
+        {
+          "correlation": "peer",
+          "flow_id": "651654129786205",
+          "local": [
+            "198.18.0.1",
+            46840
+          ],
+          "peer_ip": "1.0.0.1",
+          "peer_port": 443,
+          "proto": "TCP"
+        },
+        {
+          "correlation": "peer",
+          "flow_id": "649589900922354",
+          "local": [
+            "198.18.0.1",
+            42084
+          ],
+          "peer_ip": "8.8.8.8",
+          "peer_port": 443,
+          "proto": "TCP"
+        },
+        {
+          "correlation": "peer",
+          "flow_id": "622490639819351",
+          "local": [
+            "198.18.0.1",
+            33374
+          ],
+          "peer_ip": "8.8.4.4",
+          "peer_port": 443,
+          "proto": "TCP"
+        },
+        {
+          "correlation": "peer",
+          "flow_id": "717356564604243",
+          "local": [
+            "198.18.0.1",
+            52346
+          ],
+          "peer_ip": "9.9.9.9",
+          "peer_port": 443,
+          "proto": "TCP"
+        },
+        {
+          "correlation": "peer",
+          "flow_id": "733757895491782",
+          "local": [
+            "198.18.0.1",
+            47898
+          ],
+          "peer_ip": "149.112.112.112",
+          "peer_port": 443,
+          "proto": "TCP"
+        }
+      ],
+      "mode": "enforce",
+      "result": "banned-600s",
+      "tcp_socket_actions": [
+        {
+          "ok": true,
+          "output": "Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n0      0        10.148.17.1:1443 203.0.113.20:40907       \n0      0        10.148.17.1:1443 203.0.113.20:53203       \n0      0        10.148.17.1:1443 203.0.113.20:52235       \n0      0        10.148.17.1:1443 203.0.113.20:49181       \n0      0        10.148.17.1:1443 203.0.113.20:35369",
+          "scope": "all"
+        }
+      ],
+      "time": "2026-11-26T21:31:46.957372+00:00",
+      "unique_flows": 5,
+      "unique_peers": 5
+    },
+    {
+      "ban_scope": "all-ports-and-protocols",
+      "ban_seconds": 600,
+      "client_ip": "203.0.113.21",
+      "email": "udp@test",
+      "emails": [
+        "udp@test"
+      ],
+      "evidence": [
+        {
+          "correlation": "udp_socket",
+          "flow_id": "879077474008736",
+          "local": [
+            "198.18.0.1",
+            41470
+          ],
+          "peer_ip": "212.129.33.59",
+          "peer_port": 6881,
+          "proto": "UDP"
+        },
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1259805862319780",
+          "local": [
+            "198.18.0.1",
+            41470
+          ],
+          "peer_ip": "87.98.162.88",
+          "peer_port": 6881,
+          "proto": "UDP"
+        },
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1636662200567578",
+          "local": [
+            "198.18.0.1",
+            41470
+          ],
+          "peer_ip": "147.78.3.239",
+          "peer_port": 6881,
+          "proto": "UDP"
+        },
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1738048776487109",
+          "local": [
+            "198.18.0.1",
+            41470
+          ],
+          "peer_ip": "185.126.239.132",
+          "peer_port": 6881,
+          "proto": "UDP"
+        },
+        {
+          "correlation": "udp_socket",
+          "flow_id": "1909345833928950",
+          "local": [
+            "198.18.0.1",
+            41470
+          ],
+          "peer_ip": "168.222.245.126",
+          "peer_port": 6881,
+          "proto": "UDP"
+        }
+      ],
+      "mode": "enforce",
+      "result": "banned-600s",
+      "tcp_socket_actions": [
+        {
+          "ok": true,
+          "output": "Recv-Q Send-Q Local Address:Port Peer Address:Port Process\n0      0        10.148.17.1:1443 203.0.113.21:53565",
+          "scope": "all"
+        }
+      ],
+      "time": "2026-11-26T21:31:51.532413+00:00",
+      "unique_flows": 5,
+      "unique_peers": 5
+    }
+  ],
+  "nft_bans": {
+    "nftables": [
+      {
+        "metainfo": {
+          "version": "1.0.9",
+          "release_name": "Old Doc Yak #3",
+          "json_schema_version": 1
+        }
+      },
+      {
+        "set": {
+          "family": "inet",
+          "name": "clients_v4",
+          "table": "xray_client_ban",
+          "type": "ipv4_addr",
+          "handle": 3,
+          "size": 4096,
+          "flags": [
+            "timeout"
+          ],
+          "timeout": 600,
+          "elem": [
+            {
+              "elem": {
+                "val": "203.0.113.20",
+                "expires": 590
+              }
+            },
+            {
+              "elem": {
+                "val": "203.0.113.21",
+                "expires": 595
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "stats": {
+    "access_lines": 113,
+    "access": 9,
+    "access_ignored": 101,
+    "eve_lines": 44,
+    "alerts": 44,
+    "matched": 10,
+    "matched_by_udp_socket": 5,
+    "udp_socket_logs": 2,
+    "udp_socket_bindings": 2,
+    "correlation_waits": 1,
+    "unmatched_expired": 0,
+    "bans": 2,
+    "ban_errors": 0
+  },
+  "blocked_alerts": {
+    "TCP": 32,
+    "UDP": 12
+  },
+  "banned_clients_https_blocked": true,
+  "control_client_survives": true,
+  "missing_suricata_fails_closed": true,
+  "external_endpoint_blocked_fails_closed": true,
+  "guard_execution": "Production Correlator/Firewall in the test process; actual nftables",
+  "reserved_clients_allowed_only_inside_test": true,
+  "xray": "Xray 26.11.9 (Xray, Penetrates Everything.) 676eaf6 (go1.27.3 linux/amd64)\nA unified platform for anti-censorship.\n",
+  "observations": {
+    "initial_udp_flow_not_counted": {
+      "peer_ip": "67.215.246.10",
+      "flow_start": "2026-11-26T21:31:47.152797+0000",
+      "socket_opened_log": "2026-11-26T21:31:47.154297+00:00",
+      "flow_precedes_open_log_milliseconds": 1.5,
+      "reason": "Strict socket-generation check rejects a flow starting before the INFO open record; the remaining five DHT flows are matched through the live inode."
+    },
+    "initial_dht_packets_observed_after_queue_per_peer": {
+      "67.215.246.10": 3,
+      "212.129.33.59": 3,
+      "87.98.162.88": 3,
+      "147.78.3.239": 3,
+      "185.126.239.132": 3,
+      "168.222.245.126": 3
+    }
+  },
+  "limitations": [
+    "This is an external-outbound test, not a remote Marzban/systemd deployment. Production Correlator/Firewall run inside the test process and apply real nftables and ss -K.",
+    "Test clients use documentation-only IPs in the container. Their ban allow override exists only in this test; production public-IP protection is unchanged.",
+    "TCP BitTorrent handshakes and UDP DHT are synthetic protocol-valid test traffic. No torrent download or DHT reply is required or claimed; ordinary UDP transport is validated by DNS replies through the supplied node.",
+    "nDPI allows initial unclassified packets through. Five DHT requests are sent per peer to finish detection when no reply arrives.",
+    "Six DHT bootstrap IPs are contacted, and five flows/peers are correlated before the UDP ban. The first flow is conservatively excluded because its start predates the INFO socket-open timestamp by about one millisecond.",
+    "The machine already had the same public egress IP through its existing network path. Exit IP alone is not proof of this supplied key. The test uses only the supplied VLESS outbound and separately verifies that blocking its endpoint stops HTTPS without DIRECT fallback.",
+    "These results apply to the tested corrected RAW/REALITY link without flow and the listed engine versions, not every VLESS server or every encrypted P2P variant."
+  ]
+}

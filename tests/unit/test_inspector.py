@@ -138,6 +138,62 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("Restart=on-failure\n", unit)
         self.assertNotIn("ExecStop=", unit)
 
+    def test_reinstall_preserves_explicit_routing_only_mode(self):
+        self.paths.config.mkdir(parents=True)
+        self.paths.bypass.write_text("routing-only\n")
+        with mock.patch.object(i, "run"):
+            i.prepare(self.paths, self.config)
+        self.assertEqual(self.paths.bypass.read_text(), "routing-only\n")
+
+
+class InspectionModeTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.paths = i.Paths(Path(self.temporary.name))
+
+    def test_disable_removes_queue_without_changing_network(self):
+        with mock.patch.object(i, "update_queue") as queue, \
+             mock.patch.object(i.tun_network, "Network") as network:
+            i.set_inspection(self.paths, enabled=False)
+            i.set_inspection(self.paths, enabled=False)
+        self.assertEqual(self.paths.bypass.read_text(), "routing-only\n")
+        self.assertEqual(self.paths.bypass.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(queue.call_args_list, [mock.call(remove=True, paths=self.paths, check_device=False)] * 2)
+        network.assert_not_called()
+
+    def test_queue_restart_and_reload_preserve_disabled_mode(self):
+        with mock.patch.object(i, "update_queue") as queue:
+            i.set_inspection(self.paths, enabled=False)
+            i.sync_queue(self.paths, check_device=False)
+            i.sync_queue(self.paths)
+        self.assertEqual(queue.call_args_list[-2:], [
+            mock.call(remove=True, paths=self.paths, check_device=False),
+            mock.call(remove=True, paths=self.paths, check_device=True)])
+        self.assertTrue(self.paths.bypass.is_file())
+
+    def test_enable_restores_queue_and_removes_persistent_bypass(self):
+        with mock.patch.object(i, "update_queue") as queue:
+            i.set_inspection(self.paths, enabled=False)
+            i.set_inspection(self.paths, enabled=True)
+            self.assertFalse(self.paths.bypass.exists())
+            i.sync_queue(self.paths)
+        self.assertEqual(queue.call_args_list[-2:], [
+            mock.call(remove=False, paths=self.paths, check_device=False),
+            mock.call(remove=False, paths=self.paths, check_device=True)])
+
+    def test_disable_reports_queue_removal_failure(self):
+        with mock.patch.object(i, "update_queue", side_effect=RuntimeError("cannot remove queue")):
+            with self.assertRaisesRegex(RuntimeError, "cannot remove queue"):
+                i.set_inspection(self.paths, enabled=False)
+
+    def test_routing_only_watcher_can_start_before_tun_exists(self):
+        with mock.patch.object(i, "update_queue"):
+            i.set_inspection(self.paths, enabled=False)
+        with mock.patch.object(i.tun_network, "Network") as network:
+            i.wait_network(self.paths)
+        network.assert_not_called()
+
 
 class DiscoveryTests(unittest.TestCase):
     def test_old_version_and_missing_nfqueue_are_rejected(self):
@@ -223,6 +279,21 @@ class QueueTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "bad rules"):
                 i.update_queue()
         self.assertEqual(run.call_count, 2)
+
+    def test_unreadable_existing_table_is_not_treated_as_absent(self):
+        failure = mock.Mock(returncode=1, stderr="permission denied")
+        inventory = mock.Mock(stdout=json.dumps({"nftables": [{
+            "table": {"family": "inet", "name": i.TABLE}}]}))
+        with mock.patch.object(i, "run", side_effect=[failure, inventory]) as commands:
+            with self.assertRaisesRegex(RuntimeError, "Cannot read nftables table"):
+                i.update_queue(remove=True)
+        self.assertEqual(commands.call_count, 2)
+
+    def test_queue_removal_propagates_table_listing_failure(self):
+        with mock.patch.object(i, "run", side_effect=[mock.Mock(returncode=1),
+                               RuntimeError("cannot list nftables")]):
+            with self.assertRaisesRegex(RuntimeError, "cannot list nftables"):
+                i.update_queue(remove=True)
 
     def test_wait_ready_requires_the_configured_queue(self):
         with mock.patch.object(Path, "read_text", side_effect=["42 123 0\n", "0 456 0\n"]), \

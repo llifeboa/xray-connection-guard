@@ -21,6 +21,12 @@ sudo env PYTHONPATH="$PWD/src" unshare --net python3 -B tests/integration/test_l
 sudo env PYTHONPATH="$PWD/src" unshare --mount --net python3 -B tests/integration/test_linux_installer.py
 ```
 
+Тест установщика проверяет ранний отказ при старой/неопределённой версии запущенного Xray, сохранение файлов при отказе и повторную проверку при включении TUN. Для DIRECT/SO_MARK старое ядро допускается только с явным `install --inspection-mark`. Проверяются также ошибки остановки guard и чтения nftables при `off`: без ложного сообщения об успехе и без снятия банов при ошибке остановки службы.
+
+Для `disable` проверяется снятие банов/NFQUEUE без изменения TUN-маршрутов, policy rule, сетевого состояния и `rp_filter`. Перезапуск/перезагрузка очереди должны сохранять режим «только маршрутизация»; `enable` должен возвращать анализ.
+
+Для `uninstall` проверяется остановка всех служб, удаление установленных скриптов/unit-файлов, банов/NFQUEUE и собственных маршрутов с восстановлением `rp_filter`. Повторное удаление и установка должны работать; конфигурация, журналы, резервные копии, движок, чужие правила и Xray сохраняются. Ошибки systemd/nftables не должны приводить к ложному успеху или удалению программных файлов до очистки сети.
+
 ## Полная сборка Suricata и nDPI
 
 Отдельная проверка скачивает зависимости, собирает движок в изолированных каталогах, проверяет распознавание BitTorrent на тестовом PCAP и повторную установку. Нужны интернет и несколько минут.
@@ -69,7 +75,61 @@ sudo env PYTHONPATH="$PWD/src" unshare --mount python3 -B \
 
 Проверяются TCP/UDP по IPv4, смена назначения в одной UDP-ассоциации, доменное назначение через DNS Xray, пять пиров на одном порту, реальный NFQUEUE/nDPI и IP-баны исходных TCP- и UDP/XUDP-клиентов на 600 секунд. Контрольный клиент должен продолжать работать. При остановке Suricata, отключении TUN или выходной ноды не должно быть обхода через DIRECT; после восстановления TUN и Suricata трафик должен снова проходить. Зарезервированные IP тестовых клиентов разрешаются к бану только внутри стенда; производственная защита служебных адресов не меняется.
 
+Затем тот же live-стенд явно выключает инспекцию: TCP BitTorrent и UDP DHT должны проходить через TUN без новых EVE-событий; маршруты должны сохраняться, а перезапуски помощника/Xray — восстанавливать TUN без включения DPI. Повторное включение должно вернуть блокировку. Это отдельный намеренный режим, а не аварийный обход. [Отчёт проверки](results/routing-only.json) относится к локальным изолированным Xray; установщик/команды дополнительно проверяются с подменёнными systemd и Suricata.
+
 Для проверки старых клиентов и выхода укажи `--external-xray /путь/к/другому/xray` в `test_linux_tun.py`: смешанный стенд с RU 26.11.9 и остальными Xray 26.3.27 также проходит. `--trace` сохраняет пакеты тестового TUN в `tun-packets.jsonl`. DHT может потребовать нескольких пакетов до классификации; тест проверяет блокировку после распознавания, а не невозможную гарантию блокировки всех неизвестных начальных пакетов.
+
+Для выхода через **VLESS/RAW/REALITY с Vision** добавь к полной команде `test_linux_tun.py` параметры `--exit-network raw --exit-flow xtls-rprx-vision`. Меняется транспорт между RU и изолированной выходной нодой; `INSPECT_VIA_TUN` остаётся `freedom`. [Отчёт прогона](results/vless-raw-vision.json) фиксирует реальные блокировки TCP BitTorrent/DHT и два IP-бана на 600 секунд.
+
+## Проверка доступности внешнего VLESS
+
+Перед проверкой блокировок на реальном внешнем выходе проверь обычный HTTP/HTTPS через него. Сохрани VLESS URI в отдельном файле с правами `600` вне репозитория:
+
+```bash
+env PYTHONPATH="$PWD/src" python3 -B tests/integration/test_external_vless.py \
+  --uri-file /защищённый/путь/node.link --xray /usr/local/bin/xray \
+  --output /tmp/external-vless-probe
+```
+
+Каталог `--output` должен быть новым. Тест запускает отдельный Xray с SOCKS на localhost и проверяет ответы `api.ipify.org`, `www.cloudflare.com` и `example.com`. Для сравнения с `freedom` замени `--uri-file ...` на `--direct` и укажи другой каталог вывода. Сгенерированная конфигурация с ключом удаляется после завершения; в отчёт URI и параметры аутентификации не записываются.
+
+Эта проверка не меняет firewall и маршруты хоста и не проверяет блокировки. Если HTTP/HTTPS не проходит ещё без guard, доступность внешнего туннеля нужно выяснить до проверки инспекции. Парсер сохраняет `flow` из ссылки и не подставляет Vision, когда параметр отсутствует.
+
+## Блокировки через настоящий внешний VLESS
+
+`test_external_inspection.py` использует предоставленный внешний VLESS/REALITY-outbound вместо локальной выходной ноды. Запускай только в одноразовом Docker-контейнере с собственной bridge-сетью: тест меняет адреса, маршруты и nftables **внутри контейнера**. Не используй `--network host`, Docker socket или сеть рабочего сервера. Внешняя нода и её конфигурация не меняются.
+
+Нужны Linux-бинарник Xray 26.11.9 с native TUN и установленная Suricata 8+ с nDPI. YAML движка и все его зависимости должны оставаться доступны по тем же абсолютным путям внутри контейнера. Образ из `tests/docker` содержит необходимые системные библиотеки; systemd в этом тесте не запускается. Пример для Linux из корня проекта:
+
+```bash
+ENGINE_PREFIX=/абсолютный/путь/к/префиксу/движка
+SURICATA_CONFIG="$ENGINE_PREFIX/etc/suricata/suricata.yaml"
+XRAY_BINARY=/абсолютный/путь/к/xray
+URI_FILE=/защищённый/путь/node.link
+RESULTS_DIR=$(mktemp -d /tmp/xray-external-results.XXXXXX)
+docker build -t xray-guard-systemd-test:local tests/docker
+docker run --rm --name xray-guard-external-test --network bridge \
+  --cap-add NET_ADMIN --device /dev/net/tun \
+  --mount "type=bind,source=$PWD,target=/repo,readonly" \
+  --mount "type=bind,source=$ENGINE_PREFIX,target=$ENGINE_PREFIX,readonly" \
+  --mount "type=bind,source=$XRAY_BINARY,target=/fixtures/xray,readonly" \
+  --mount "type=bind,source=$URI_FILE,target=/run/node.link,readonly" \
+  --mount "type=bind,source=$RESULTS_DIR,target=/results" \
+  --env XRAY_GUARD_EXTERNAL_TEST=1 --env PYTHONDONTWRITEBYTECODE=1 \
+  --env PYTHONPATH=/repo/src --entrypoint python3 \
+  xray-guard-systemd-test:local -u -B /repo/tests/integration/test_external_inspection.py \
+  --uri-file /run/node.link --output /results/run --xray /fixtures/xray \
+  --binary "$ENGINE_PREFIX/bin/suricata" --suricata-config "$SURICATA_CONFIG" \
+  --expected-exit-ip ПУБЛИЧНЫЙ_IP_ВЫХОДА --trace
+```
+
+Имя контейнера должно быть свободным. `--expected-exit-ip` необязателен, но позволяет проверить именно ожидаемый выход. Конфигурации с URI создаются во временном каталоге контейнера и удаляются при завершении; URI, UUID и параметры аутентификации в отчёт не записываются. Файл `node.link` остаётся у владельца. `--trace` сохраняет тестовый plaintext-трафик TUN; публиковать этот захват не нужно.
+
+Проверяются HTTPS и UDP DNS до/после включения DPI, блокировка настоящими nDPI/NFQUEUE, IP-баны обоих клиентов на 600 секунд и сохранение HTTPS/DNS третьего клиента. Guard вызывается через производственные `Correlator`/`Firewall` в тестовом процессе, а не через systemd; nftables и `ss -K` настоящие. Затем тест останавливает Suricata и временно запрещает TCP к адресу внешней ноды: в обоих случаях контрольный HTTPS должен перестать работать без перехода в DIRECT и восстановиться после снятия неисправности.
+
+Трафик ограничен BitTorrent handshake к пяти публичным TCP-адресам и пятью DHT-запросами к каждому из шести публичных bootstrap-IP, без скачивания раздач. Все DHT-направления используют один UDP-сокет; порог бана остаётся пять сопоставленных потоков и пиров. Шестой адрес учитывает консервативный отказ сопоставлять первый поток, если его `flow.start` чуть раньше INFO-записи открытия сокета. Проверка поколения сокета не ослабляется. nDPI может пропустить начальные пакеты до окончания распознавания; тест не гарантирует блокировку первого пакета или всех разновидностей зашифрованного P2P.
+
+[Успешный внешний прогон от 27.11.2026](results/external-vless.json) выполнен с RAW/REALITY **без `flow`**: выходной IP подтверждён до/после DPI и банов. Предыдущая ссылка с Vision не передавала HTTP/HTTPS; её результат в [историческом отчёте](results/vless-raw-vision.json) не подменяет проверку исправленного ключа.
 
 ## Marzban в Docker с настоящим systemd
 

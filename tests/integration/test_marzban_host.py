@@ -448,16 +448,20 @@ def test_current_core(panel, pid, ports, state, report):
         passed("Negative test: global autoSystemRoutingTable can cut off SSH; reverting the profile restores access")
 
         panel.request("/core/config", make_config(state), method="PUT")
-        manage("off")
-        command(["systemctl", "disable", "--now", UNITS[1], UNITS[2]])
-        command(["python3", "/opt/xray-connection-guard/inspector.py", "queue-off"])
+        manage("uninstall")
+        for unit in UNITS:
+            assert command(["systemctl", "is-active", "--quiet", unit], check=False).returncode != 0
+            assert command(["systemctl", "is-enabled", "--quiet", unit], check=False).returncode != 0
         assert not transport.tun_network.routes()
         assert not any(rule.get("priority") == 14817 for rule in transport.tun_network.rules())
         assert command(["nft", "list", "table", "inet", "xray_guard_inspect"], check=False).returncode != 0
+        assert not Path("/opt/xray-connection-guard/guard.py").exists()
+        assert Path("/etc/xray-connection-guard/config.json").is_file()
         assert snapshot()["default"] == baseline
         with namespace(pid):
             transport.check_tcp_echo(ports["control"], b"after-full-rollback")
-        passed("Full rollback removes owned routes, policy rule and NFQUEUE; the original relay path still works")
+        passed("Uninstall removes services, program files and owned routing; the original relay path still works")
+        manage("install", "--container", "marzban")
         panel.request("/core/config", make_config(state, tun=True), method="PUT")
         manage("enable", "--inspection-interface", "xray-guard", "--container", "marzban")
         command(["systemctl", "enable", "docker"])
@@ -513,7 +517,12 @@ def main():
             monitor.start()
             cleanup.callback(monitor.stop)
             baseline = snapshot()["default"]
-            manage("install")
+            result = manage("install", "--container", "marzban", check=False)
+            report["old_install"] = {"exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+            assert result.returncode != 0 and "too old for TUN" in result.stderr
+            assert snapshot()["default"] == baseline
+            report["tests"].append("26.3.27 is rejected by the TUN installer before changing the working setup")
+            manage("install", "--inspection-mark", "--container", "marzban")
             monitor.phase = "old-core-tun"
             print("Applying TUN through Marzban API on Xray 26.3.27", flush=True)
             panel.request("/core/config", make_config(state, tun=True), method="PUT")
@@ -523,8 +532,8 @@ def main():
             assert not any(device["addr_info"] for device in report["old_tun"]), old_address
             result = manage("enable", "--inspection-interface", "xray-guard", "--container", "marzban", check=False)
             report["old_enable"] = {"exit_code": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
-            assert result.returncode != 0, "Old core unexpectedly configured a gateway"
-            report["tests"].append("26.3.27 ignores gateway; enable fails without changing physical default")
+            assert result.returncode != 0 and "too old for TUN" in result.stderr
+            report["tests"].append("26.3.27 ignores gateway; enable rejects the old core without changing physical default")
             assert snapshot()["default"] == baseline
             monitor.stop()
             report["legacy_management"] = {"samples": monitor.samples, "failures": monitor.failures}
@@ -535,6 +544,7 @@ def main():
             print("Starting real Marzban with Xray 26.11.9", flush=True)
             panel = start_panel(args.image, NEW, make_config(state, tun=True), output)
             report["new_core"] = panel.request("/core")
+            manage("install", "--container", "marzban")
             manage("enable", "--inspection-interface", "xray-guard", "--container", "marzban")
             assert command(["systemctl", "is-active", *UNITS]).stdout.split() == ["active"] * 3
             with namespace(client_worker.pid):
